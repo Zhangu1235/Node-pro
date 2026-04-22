@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StartupEvents - Discover & Connect</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/styles/main.css">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="logo"> Startup<span>Events</span></div>
+        <div class="nav-links">
+            <a href="#">Home</a>
+            <a href="#events">Discover</a>
+            <a href="#" class="btn-primary">Post Event</a>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Discover the next big <span class="gradient-text">Startup</span> event.</h1>
+            <p>Connect with founders, pitch to top-tier VCs, and scale your vision. The best startup events, all in one
+                place.</p>
+            <div class="search-bar">
+                <input type="text" id="keywordInput" placeholder="Keywords: Startup, AI..." style="flex: 1;">
+                <div class="search-divider"></div>
+                <input type="text" id="locationInput" placeholder="Location: Jalandhar, IN" style="flex: 1;">
+                <button class="btn-search">Search</button>
+            </div>
+            <div class="actions-row">
+                <button id="refreshApifyBtn" class="btn-apify">Fetch Fresh Events</button>
+                <span id="fetchStatusPill" class="status-pill">Idle</span>
+            </div>
+
+        </div>
+        <div class="hero-graphics">
+            <div class="glass-orb orb-1"></div>
+            <div class="glass-orb orb-2"></div>
+        </div>
+    </header>
+
+    <main id="events" class="events-section">
+        <div class="section-header">
+            <h2>Upcoming <span class="gradient-text">Events</span></h2>
+            <div class="filter-chips">
+                <button class="chip active">All</button>
+                <button class="chip">Networking</button>
+                <button class="chip">Pitch</button>
+                <button class="chip">Workshops</button>
+            </div>
+        </div>
+        <div class="events-toolbar">
+            <button id="clearSearchBtn" class="toolbar-btn">Clear Search</button>
+            <select id="sortSelect" class="toolbar-select">
+                <option value="date-asc">Sort: Date (Earliest)</option>
+                <option value="date-desc">Sort: Date (Latest)</option>
+                <option value="name-asc">Sort: Name (A-Z)</option>
+            </select>
+        </div>
+        <div class="stats-panel">
+            <div class="stat-item">
+                <div class="stat-label">Total Events</div>
+                <div class="stat-value" id="eventsCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Last Sync</div>
+                <div class="stat-value stat-muted" id="lastSyncAt">Never</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Live Stream</div>
+                <div class="stat-value" id="liveState"><span class="pulse-dot"></span> Connected</div>
+            </div>
+        </div>
+
+        <div id="events-grid" class="events-grid">
+            <!-- Events will be dynamically injected here -->
+            <div class="loading-state">Loading amazing events...</div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 StartupEvents. Empowering the founder ecosystem.</p>
+    </footer>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/scripts/app.js"></script>
+</body>
+
+</html>
