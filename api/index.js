@@ -1,14 +1,26 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { ApifyClient } = require('apify-client');
 const path = require('path');
 
 const app = express();
+
+// Initialize Apify only if token exists
+let apifyClient = null;
+let ApifyClient = null;
+
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN;
 const APIFY_WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET;
 const APIFY_ACTOR_ID = process.env.APIFY_ACTOR_ID || '9dardaZ3akeIhRfs3';
-const apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
+
+if (APIFY_API_TOKEN) {
+    try {
+        ApifyClient = require('apify-client').ApifyClient;
+        apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
+    } catch (e) {
+        console.warn('Apify client initialization failed:', e.message);
+    }
+}
 
 app.use(cors());
 app.use(express.json());
@@ -69,8 +81,8 @@ function getDatasetIdFromPayload(payload) {
 }
 
 app.post('/api/apify/fetch', async (req, res) => {
-    if (!APIFY_API_TOKEN) {
-        return res.status(400).json({ error: 'Missing APIFY_API_TOKEN in .env' });
+    if (!APIFY_API_TOKEN || !apifyClient) {
+        return res.status(400).json({ error: 'Apify API token not configured. Set APIFY_API_TOKEN in environment variables.' });
     }
 
     try {
@@ -103,6 +115,10 @@ app.post('/api/apify/fetch', async (req, res) => {
 
 // Webhook for Apify notifications
 app.post('/api/webhooks/apify', express.text({type: '*/*'}), async (req, res) => {
+    if (!apifyClient) {
+        return res.status(400).json({ error: 'Apify client not initialized' });
+    }
+
     let payload = req.body;
     
     if (typeof payload === 'string') {
