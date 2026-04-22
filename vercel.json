@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node",
+      "config": { "maxDuration": 30 }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "api/index.js"
+    }
+  ],
+  "env": {
+    "APIFY_API_TOKEN": "@apify_api_token",
+    "APIFY_WEBHOOK_SECRET": "@apify_webhook_secret",
+    "APIFY_ACTOR_ID": "@apify_actor_id"
+  }
+}

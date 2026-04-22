@@ -244,36 +244,27 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // WebSocket Integration
-    const socket = io();
-
-    socket.on('apify_events_updated', (newBatchOfEvents) => {
-        console.log("Real-time Apify data received!", newBatchOfEvents);
-        
-        // Replace our current state with the freshly scraped dataset!
-        allEvents = newBatchOfEvents;
-        
-        // Apply default search (e.g. Jalandhar) and render instantly with the new data
-        applyFiltersAndRender();
-        
-        // We can optionally attach the animation trick to stagger them in natively
-        const cards = eventsGrid.querySelectorAll('.event-card');
-        cards.forEach((card, index) => {
-            card.classList.add('new-realtime-event');
-            card.style.animationDelay = `${index * 0.1}s`;
-        });
-
-        updateStats();
-        setFetchStatus(`Live update: ${newBatchOfEvents.length} events`, 'success');
-    });
-
-    socket.on('connect', () => {
-        liveStateEl.innerHTML = '<span class="pulse-dot"></span> Connected';
-    });
-
-    socket.on('disconnect', () => {
-        liveStateEl.innerHTML = '<span class="pulse-dot offline"></span> Disconnected';
-    });
+    // Polling for updates (Socket.IO not available on Vercel)
+    let lastEventCount = 0;
+    setInterval(async () => {
+        try {
+            const response = await fetch('/api/events');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.events && data.events.length > lastEventCount) {
+                    console.log("New events available via polling!");
+                    allEvents = data.events;
+                    applyFiltersAndRender();
+                    updateStats();
+                    lastEventCount = data.events.length;
+                }
+                liveStateEl.innerHTML = '<span class="pulse-dot"></span> Connected';
+            }
+        } catch (error) {
+            liveStateEl.innerHTML = '<span class="pulse-dot offline"></span> Disconnected';
+            console.error('Polling error:', error);
+        }
+    }, 30000); // Poll every 30 seconds
 
     keywordInput.addEventListener('input', () => {
         applyFiltersAndRender();
