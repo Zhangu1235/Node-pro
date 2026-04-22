@@ -26,6 +26,7 @@
 
     <header class="hero">
         <div class="hero-content">
+            <div class="hero-badge">🚀 Discover Startup Events</div>
             <h1>Discover the next big <span class="gradient-text">Startup</span> event.</h1>
             <p>Connect with founders, pitch to top-tier VCs, and scale your vision. The best startup events, all in one place.</p>
             <div class="search-bar">
@@ -36,9 +37,27 @@
             </div>
             <div class="actions-row">
                 <button id="refreshApifyBtn" class="btn-apify" aria-label="Fetch fresh events from Meetup">📡 Fetch Fresh Events</button>
+                <a id="downloadJsonBtn" class="btn-apify btn-apify-outline" href="/api/events/download" aria-label="Download fetched events JSON">⬇ Download JSON</a>
                 <span id="fetchStatusPill" class="status-pill" role="status" aria-live="polite">Idle</span>
             </div>
-
+            <div class="hero-insights" role="region" aria-label="Sync overview">
+                <div class="insight-card accent">
+                    <div class="insight-label">Local Cache</div>
+                    <div id="cacheStatusText" class="insight-value">Waiting for first fetch</div>
+                    <div id="cacheFilePath" class="insight-meta">JSON will be written to the local project folder.</div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-label">Current Search</div>
+                    <div id="activeSearchSummary" class="insight-value">All startup events</div>
+                    <div class="insight-meta">Use keywords and location to refine the feed.</div>
+                </div>
+            </div>
+            <div class="quick-tags">
+                <span class="quick-tag" data-keyword="AI">AI Events</span>
+                <span class="quick-tag" data-keyword="Web3">Web3</span>
+                <span class="quick-tag" data-keyword="Fintech">Fintech</span>
+                <span class="quick-tag" data-keyword="SaaS">SaaS</span>
+            </div>
         </div>
         <div class="hero-graphics">
             <div class="glass-orb orb-1"></div>
@@ -54,6 +73,7 @@
                 <button class="chip" aria-pressed="false">Networking</button>
                 <button class="chip" aria-pressed="false">Pitch</button>
                 <button class="chip" aria-pressed="false">Workshops</button>
+                <button id="savedEventsChip" class="chip saved-chip" aria-pressed="false" data-count="0" title="View saved events">💾 Saved</button>
             </div>
         </div>
         <div class="events-toolbar">
@@ -88,6 +108,34 @@
     <footer>
         <p>&copy; 2026 StartupEvents. Empowering the founder ecosystem. | <a href="#" style="color: var(--accent-primary); text-decoration: none;">Privacy Policy</a> | <a href="#" style="color: var(--accent-primary); text-decoration: none;">Terms of Service</a></p>
     </footer>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container" role="status" aria-live="assertive" aria-atomic="true"></div>
+
+    <!-- Keyboard Shortcuts Help -->
+    <div id="shortcuts-help" class="shortcuts-help" role="dialog" aria-labelledby="shortcuts-title">
+        <div class="shortcuts-content">
+            <h3 id="shortcuts-title">⌨️ Keyboard Shortcuts</h3>
+            <div class="shortcuts-list">
+                <div class="shortcut-item">
+                    <kbd>S</kbd> <span>Save event (when card focused)</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>C</kbd> <span>Clear filters</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>?</kbd> <span>Toggle this help</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>Esc</kbd> <span>Close this dialog</span>
+                </div>
+            </div>
+            <button class="shortcuts-close" aria-label="Close shortcuts help">×</button>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Toggle -->
+    <button id="shortcuts-btn" class="shortcuts-btn" title="Show keyboard shortcuts" aria-label="Show keyboard shortcuts">?</button>
 
     <script src="/scripts/app.js"></script>
 </body>

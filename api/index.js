@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const { loadSnapshot, saveEvents, getStorageInfo } = require('../lib/event-store');
 
 const app = express();
 
@@ -38,6 +39,11 @@ app.get('/health', (req, res) => {
 
 // Cache to store Apify events persistently for new visits
 let cachedEvents = [];
+let cacheMeta = {
+    savedAt: null,
+    filePath: null,
+    eventsCount: 0
+};
 
 const defaultActorInput = {
     searchUrls: [
@@ -106,13 +112,20 @@ app.post('/api/apify/fetch', async (req, res) => {
         // Fetch and cache items from the Actor output dataset
         const { items } = await apifyClient.dataset(datasetId).listItems();
         cachedEvents = mapItemsToEvents(items || []);
+        const snapshot = await saveEvents(cachedEvents, {
+            actorId: APIFY_ACTOR_ID,
+            datasetId,
+            runId: run?.id || null
+        });
+        cacheMeta = getStorageInfo(snapshot);
 
         return res.status(200).json({
             message: 'Apify actor run completed and events updated.',
             actorId: APIFY_ACTOR_ID,
             runId: run?.id,
             datasetId,
-            eventsCount: cachedEvents.length
+            eventsCount: cachedEvents.length,
+            cache: cacheMeta
         });
     } catch (error) {
         console.error('Error running Apify actor:', error.message);
@@ -159,6 +172,12 @@ app.post('/api/webhooks/apify', express.text({type: '*/*'}), async (req, res) =>
             const newEvents = mapItemsToEvents(items);
             
             cachedEvents = newEvents;
+            const snapshot = await saveEvents(cachedEvents, {
+                actorId: APIFY_ACTOR_ID,
+                datasetId,
+                sourceEvent: 'webhook'
+            });
+            cacheMeta = getStorageInfo(snapshot);
             console.log(`Updated cache with ${cachedEvents.length} new events from Apify!`);
             
         } catch (error) {
@@ -174,7 +193,18 @@ app.post('/api/webhooks/apify', express.text({type: '*/*'}), async (req, res) =>
 
 // Get cached events
 app.get('/api/events', async (req, res) => {
-    return res.json({ events: cachedEvents });
+    return res.json({
+        events: cachedEvents,
+        cache: cacheMeta
+    });
+});
+
+app.get('/api/events/download', async (req, res) => {
+    if (!cacheMeta.filePath) {
+        return res.status(404).json({ error: 'No local JSON cache available yet.' });
+    }
+
+    return res.download(cacheMeta.filePath, 'events-cache.json');
 });
 
 // Serve index.html for all other routes (SPA routing)
@@ -194,3 +224,13 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+
+(async () => {
+    try {
+        const snapshot = await loadSnapshot();
+        cachedEvents = snapshot.events;
+        cacheMeta = getStorageInfo(snapshot);
+    } catch (error) {
+        console.error('[API] Failed to load local event cache:', error.message);
+    }
+})();

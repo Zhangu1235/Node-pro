@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const locationInput = document.getElementById('locationInput');
     const searchBtn = document.querySelector('.btn-search');
     const refreshApifyBtn = document.getElementById('refreshApifyBtn');
+    const downloadJsonBtn = document.getElementById('downloadJsonBtn');
     const fetchStatusPill = document.getElementById('fetchStatusPill');
     const clearSearchBtn = document.getElementById('clearSearchBtn');
     const sortSelect = document.getElementById('sortSelect');
@@ -11,73 +12,58 @@ document.addEventListener('DOMContentLoaded', () => {
     const lastSyncAtEl = document.getElementById('lastSyncAt');
     const liveStateEl = document.getElementById('liveState');
     const savedEventsChip = document.getElementById('savedEventsChip');
+    const cacheStatusText = document.getElementById('cacheStatusText');
+    const cacheFilePath = document.getElementById('cacheFilePath');
+    const activeSearchSummary = document.getElementById('activeSearchSummary');
 
     let allEvents = [];
     let lastRenderedEvents = [];
-    let showOnlySaved = false;
     let savedEventIds = new Set();
+    let showOnlySaved = false;
+    let activeCategory = 'all';
+    let lastEventCount = 0;
+    let cacheInfo = null;
 
-    // Load saved events from localStorage
-    function loadSavedEvents() {
-        const saved = localStorage.getItem('savedEvents');
-        savedEventIds = new Set(saved ? JSON.parse(saved) : []);
-        updateSavedBadge();
+    function showToast(message, type = 'info', duration = 3000) {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        const icons = {
+            success: '✓',
+            error: '✗',
+            info: 'ℹ',
+            save: '❤'
+        };
+
+        toast.innerHTML = `
+            <span class="toast-icon">${icons[type] || icons.info}</span>
+            <span class="toast-message">${message}</span>
+            <button class="toast-close" aria-label="Close notification">×</button>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        const removeToast = () => {
+            toast.classList.add('removing');
+            setTimeout(() => toast.remove(), 300);
+        };
+
+        toast.querySelector('.toast-close').addEventListener('click', removeToast);
+        setTimeout(removeToast, duration);
     }
 
-    // Save event to localStorage
-    function saveEvent(eventId) {
-        savedEventIds.add(eventId);
-        localStorage.setItem('savedEvents', JSON.stringify(Array.from(savedEventIds)));
-        updateSavedBadge();
-        // Refresh UI for this event
-        const saveBtn = document.querySelector(`[data-event-id="${eventId}"] .save-event-btn`);
-        if (saveBtn) {
-            saveBtn.classList.add('saved');
-            saveBtn.setAttribute('aria-label', 'Saved event - click to unsave');
+    function formatTimestamp(dateString) {
+        if (!dateString) {
+            return 'Never';
         }
-    }
 
-    // Remove event from localStorage
-    function unsaveEvent(eventId) {
-        savedEventIds.delete(eventId);
-        localStorage.setItem('savedEvents', JSON.stringify(Array.from(savedEventIds)));
-        updateSavedBadge();
-        const saveBtn = document.querySelector(`[data-event-id="${eventId}"] .save-event-btn`);
-        if (saveBtn) {
-            saveBtn.classList.remove('saved');
-            saveBtn.setAttribute('aria-label', 'Save this event');
+        const value = new Date(dateString);
+        if (Number.isNaN(value.getTime())) {
+            return 'Unknown';
         }
-    }
 
-    // Check if event is saved
-    function isEventSaved(eventId) {
-        return savedEventIds.has(eventId);
-    }
-
-    // Update saved events badge
-    function updateSavedBadge() {
-        const count = savedEventIds.size;
-        if (savedEventsChip) {
-            savedEventsChip.setAttribute('data-count', count);
-            if (count > 0) {
-                savedEventsChip.style.opacity = '1';
-            } else {
-                savedEventsChip.style.opacity = '0.5';
-            }
-        }
-    }
-
-    // Filter for saved events only
-    function filterSavedOnly(events) {
-        return events.filter(event => {
-            const eventId = event.id || event.name;
-            return isEventSaved(eventId);
-        });
-    }
-
-
-    function formatTimestamp(date = new Date()) {
-        return date.toLocaleString('en-US', {
+        return value.toLocaleString('en-US', {
             month: 'short',
             day: 'numeric',
             hour: 'numeric',
@@ -91,74 +77,104 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchStatusPill.classList.add(`is-${state}`);
     }
 
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    function loadSavedEvents() {
+        const saved = localStorage.getItem('savedEvents');
+        savedEventIds = new Set(saved ? JSON.parse(saved) : []);
+        updateSavedBadge();
+    }
+
+    function updateSavedBadge() {
+        const count = savedEventIds.size;
+        savedEventsChip.setAttribute('data-count', count);
+        savedEventsChip.style.opacity = count > 0 ? '1' : '0.5';
+    }
+
+    function saveEvent(eventId) {
+        savedEventIds.add(eventId);
+        localStorage.setItem('savedEvents', JSON.stringify(Array.from(savedEventIds)));
+        updateSavedBadge();
+        syncSaveButtons(eventId, true);
+        showToast('Event saved locally', 'save', 2200);
+    }
+
+    function unsaveEvent(eventId) {
+        savedEventIds.delete(eventId);
+        localStorage.setItem('savedEvents', JSON.stringify(Array.from(savedEventIds)));
+        updateSavedBadge();
+        syncSaveButtons(eventId, false);
+        showToast('Saved event removed', 'info', 2200);
+    }
+
+    function isEventSaved(eventId) {
+        return savedEventIds.has(eventId);
+    }
+
+    function syncSaveButtons(eventId, saved) {
+        const buttons = document.querySelectorAll(`.save-event-btn[data-event-id="${CSS.escape(eventId)}"]`);
+        buttons.forEach((button) => {
+            button.classList.toggle('saved', saved);
+            button.setAttribute('aria-label', saved ? 'Saved event - click to unsave' : 'Save this event');
+            button.setAttribute('title', saved ? 'Unsave event' : 'Save event');
+            const icon = button.querySelector('.save-icon');
+            if (icon) {
+                icon.textContent = saved ? '❤' : '🤍';
+            }
+        });
+    }
+
+    function updateSearchSummary() {
+        const parts = [];
+        const keyword = keywordInput.value.trim();
+        const location = locationInput.value.trim();
+
+        if (keyword) {
+            parts.push(`Keyword: ${keyword}`);
+        }
+
+        if (location) {
+            parts.push(`Location: ${location}`);
+        }
+
+        if (showOnlySaved) {
+            parts.push('Saved only');
+        }
+
+        if (activeCategory !== 'all') {
+            parts.push(`Category: ${activeCategory}`);
+        }
+
+        activeSearchSummary.textContent = parts.length > 0 ? parts.join(' • ') : 'All startup events';
+    }
+
+    function updateCacheInfo(cache) {
+        cacheInfo = cache || null;
+
+        if (!cacheInfo || !cacheInfo.savedAt) {
+            cacheStatusText.textContent = 'Waiting for first fetch';
+            cacheFilePath.textContent = 'JSON will be written to the local project folder.';
+            downloadJsonBtn.setAttribute('aria-disabled', 'true');
+            downloadJsonBtn.classList.add('is-disabled');
+            return;
+        }
+
+        cacheStatusText.textContent = `${cacheInfo.eventsCount || 0} events cached`;
+        cacheFilePath.textContent = `${cacheInfo.filePath || 'Local cache'} • ${formatTimestamp(cacheInfo.savedAt)}`;
+        downloadJsonBtn.removeAttribute('aria-disabled');
+        downloadJsonBtn.classList.remove('is-disabled');
+    }
+
     function updateStats() {
         eventsCountEl.textContent = String(allEvents.length);
-        if (allEvents.length > 0) {
-            lastSyncAtEl.textContent = formatTimestamp(new Date());
-        }
-    }
-
-
-
-    // Fetch events from the backend API
-    async function fetchEvents() {
-        try {
-            const response = await fetch('/api/events');
-            
-            if (!response.ok) {
-                const errData = await response.json();
-                eventsGrid.innerHTML = `<div class="loading-state" style="color: #ef4444;">API Error: ${errData.error}</div>`;
-                return;
-            }
-
-            const data = await response.json();
-            
-            if (data.events && data.events.length > 0) {
-                allEvents = data.events;
-                applyFiltersAndRender();
-                updateStats();
-                setFetchStatus('Loaded', 'success');
-            } else {
-                eventsGrid.innerHTML = '<div class="loading-state">No upcoming events found. Check back later!</div>';
-                setFetchStatus('No Data', 'idle');
-            }
-        } catch (error) {
-            console.error('Error fetching events:', error);
-            eventsGrid.innerHTML = '<div class="loading-state">Failed to load events. Please try again later.</div>';
-            setFetchStatus('Load Failed', 'error');
-        }
-    }
-
-    async function triggerApifyFetch(customInput = null) {
-        try {
-            refreshApifyBtn.disabled = true;
-            if (searchBtn) searchBtn.disabled = true;
-            
-            const locStr = locationInput.value.trim() ? ` (${locationInput.value.trim()})` : '';
-            setFetchStatus(`Scraping${locStr}...`, 'loading');
-            
-            const response = await fetch('/api/apify/fetch', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(customInput || {})
-            });
-
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Fetch trigger failed');
-            }
-
-            setFetchStatus(`Synced ${data.eventsCount} events`, 'success');
-            await fetchEvents();
-        } catch (error) {
-            console.error('Error triggering Apify fetch:', error);
-            setFetchStatus('Fetch Failed', 'error');
-        } finally {
-            refreshApifyBtn.disabled = false;
-            if (searchBtn) searchBtn.disabled = false;
-        }
+        lastSyncAtEl.textContent = cacheInfo?.savedAt ? formatTimestamp(cacheInfo.savedAt) : 'Never';
     }
 
     function getEventDateMs(event) {
@@ -169,120 +185,85 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function sortEvents(events) {
         const mode = sortSelect.value;
-        const copy = [...events];
+        const sorted = [...events];
 
         if (mode === 'date-desc') {
-            return copy.sort((a, b) => getEventDateMs(b) - getEventDateMs(a));
+            return sorted.sort((a, b) => getEventDateMs(b) - getEventDateMs(a));
         }
 
         if (mode === 'name-asc') {
-            return copy.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         }
 
-        return copy.sort((a, b) => getEventDateMs(a) - getEventDateMs(b));
+        return sorted.sort((a, b) => getEventDateMs(a) - getEventDateMs(b));
     }
 
-    function escapeHtml(value) {
-        return String(value)
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-            .replaceAll("'", '&#39;');
+    function getEventCategory(event) {
+        const haystack = `${event.name || ''} ${event.description || ''}`.toLowerCase();
+        if (haystack.includes('pitch')) return 'pitch';
+        if (haystack.includes('workshop')) return 'workshops';
+        if (haystack.includes('conference')) return 'conference';
+        return 'networking';
     }
 
-    // Extract card creation logic to reuse properly
-    function applyFiltersAndRender() {
-        const keywordQuery = keywordInput.value.toLowerCase();
-        const locQuery = locationInput.value.toLowerCase();
-        
-        let filtered = allEvents;
-        
-        if (keywordQuery || locQuery) {
-            filtered = allEvents.filter(event => {
-                const title = (event.name || '').toLowerCase();
-                const desc = (event.description || event.info || '').toLowerCase();
-                
-                let loc = '';
-                if (event._embedded && event._embedded.venues && event._embedded.venues.length > 0) {
-                    loc = (event._embedded.venues[0].name || '').toLowerCase();
-                    if (event._embedded.venues[0].city) loc += ' ' + (event._embedded.venues[0].city.name || '').toLowerCase();
-                }
-                
-                const matchesKeyword = !keywordQuery || title.includes(keywordQuery) || desc.includes(keywordQuery);
-                const matchesLoc = !locQuery || loc.includes(locQuery);
-                
-                return matchesKeyword && matchesLoc;
-            });
-        }
-        
-        // Apply saved events filter if active
-        if (showOnlySaved) {
-            filtered = filterSavedOnly(filtered);
-        }
-        
-        renderEvents(sortEvents(filtered));
+    function getFilteredEvents() {
+        const keywordQuery = keywordInput.value.trim().toLowerCase();
+        const locationQuery = locationInput.value.trim().toLowerCase();
+
+        return allEvents.filter((event) => {
+            const title = (event.name || '').toLowerCase();
+            const description = (event.description || event.info || '').toLowerCase();
+            const venue = event?._embedded?.venues?.[0];
+            const location = `${venue?.name || ''} ${venue?.city?.name || ''}`.toLowerCase();
+            const eventId = event.id || event.name;
+
+            const matchesKeyword = !keywordQuery || title.includes(keywordQuery) || description.includes(keywordQuery);
+            const matchesLocation = !locationQuery || location.includes(locationQuery);
+            const matchesSaved = !showOnlySaved || isEventSaved(eventId);
+            const matchesCategory = activeCategory === 'all' || getEventCategory(event) === activeCategory;
+
+            return matchesKeyword && matchesLocation && matchesSaved && matchesCategory;
+        });
     }
-    
+
     function createEventCard(event, isNew = false) {
         const title = event.name || 'Untitled Event';
-        const description = event.info || event.description || 'Join this exciting event happening soon! Grab your tickets before they sell out.';
-        
-        let rawDate = new Date().toISOString();
-        if (event.dates && event.dates.start) {
-            rawDate = event.dates.start.dateTime || event.dates.start.localDate || rawDate;
-        }
-        
+        const description = event.info || event.description || 'Join this event for founders, operators, and investors.';
+        const rawDate = event?.dates?.start?.dateTime || event?.dates?.start?.localDate || new Date().toISOString();
         const dateObj = new Date(rawDate);
-        const dateString = dateObj.toLocaleDateString('en-US', { 
-            weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+        const dateString = dateObj.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
         });
 
-        let location = 'Online / TBD';
-        if (event._embedded && event._embedded.venues && event._embedded.venues.length > 0) {
-            location = event._embedded.venues[0].name;
-            if (event._embedded.venues[0].city) {
-                location += `, ${event._embedded.venues[0].city.name}`;
-            }
-        }
+        const venue = event?._embedded?.venues?.[0];
+        const location = venue ? `${venue.name}${venue.city?.name ? `, ${venue.city.name}` : ''}` : 'Online / TBD';
 
-        let imageUrl = 'https://images.unsplash.com/photo-1559136555-e4616d94625b?auto=format&fit=crop&w=600&q=80';
-        if (event.images && event.images.length > 0) {
-            // Find a good image size (16:9)
-            const img = event.images.find(i => i.ratio === '16_9') || event.images[0];
-            imageUrl = img.url;
-        }
-
-        // Determine category badge
-        const title_lower = title.toLowerCase();
-        const desc_lower = description.toLowerCase();
-        let badge = 'Networking';
-        if (title_lower.includes('pitch') || desc_lower.includes('pitch')) badge = 'Pitch';
-        if (title_lower.includes('workshop') || desc_lower.includes('workshop')) badge = 'Workshop';
-        if (title_lower.includes('conference') || desc_lower.includes('conference')) badge = 'Conference';
+        const image = event.images?.find((item) => item.ratio === '16_9') || event.images?.[0];
+        const imageUrl = image?.url || 'https://images.unsplash.com/photo-1559136555-e4616d94625b?auto=format&fit=crop&w=600&q=80';
 
         const eventId = event.id || event.name;
         const isSaved = isEventSaved(eventId);
+        const parametersJson = escapeHtml(JSON.stringify(event.rawParameters || event, null, 2));
+        const badgeLabel = getEventCategory(event).replace('workshops', 'Workshop');
 
-        const parametersObject = event.rawParameters || event;
-        const parametersJson = escapeHtml(JSON.stringify(parametersObject, null, 2) || '{}');
-
-        const card = document.createElement('div');
+        const card = document.createElement('article');
         card.className = isNew ? 'event-card new-realtime-event' : 'event-card';
         card.setAttribute('data-event-id', eventId);
-        
+        card.tabIndex = 0;
+
         card.innerHTML = `
             <div class="event-image" style="background-image: url('${imageUrl}')">
-                <div class="event-badge">${badge}</div>
-                <button class="save-event-btn ${isSaved ? 'saved' : ''}" 
-                        data-event-id="${eventId}"
-                        aria-label="${isSaved ? 'Saved event - click to unsave' : 'Save this event'}"
-                        title="${isSaved ? 'Unsave event' : 'Save event'}">
-                    <span class="save-icon">${isSaved ? '❤️' : '🤍'}</span>
+                <div class="event-badge">${escapeHtml(badgeLabel)}</div>
+                <button class="save-event-btn ${isSaved ? 'saved' : ''}" data-event-id="${escapeHtml(eventId)}" aria-label="${isSaved ? 'Saved event - click to unsave' : 'Save this event'}" title="${isSaved ? 'Unsave event' : 'Save event'}">
+                    <span class="save-icon">${isSaved ? '❤' : '🤍'}</span>
                 </button>
             </div>
             <div class="event-content">
-                <div class="event-date">${dateString}</div>
+                <div class="event-date">${escapeHtml(dateString)}</div>
                 <h3 class="event-title">${escapeHtml(title)}</h3>
                 <p class="event-desc">${escapeHtml(description)}</p>
                 <div class="event-footer">
@@ -296,156 +277,296 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
-        // Add save event listener
         const saveBtn = card.querySelector('.save-event-btn');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (isEventSaved(eventId)) {
-                    unsaveEvent(eventId);
-                } else {
-                    saveEvent(eventId);
-                }
-            });
-        }
+        saveBtn.addEventListener('click', (eventObj) => {
+            eventObj.preventDefault();
+            eventObj.stopPropagation();
+
+            if (isEventSaved(eventId)) {
+                unsaveEvent(eventId);
+            } else {
+                saveEvent(eventId);
+            }
+        });
+
+        card.addEventListener('keydown', (eventObj) => {
+            if (eventObj.key.toLowerCase() === 's' && document.activeElement === card) {
+                eventObj.preventDefault();
+                saveBtn.click();
+            }
+        });
 
         return card;
     }
 
-    function renderEvents(events) {
-        eventsGrid.innerHTML = '';
-        lastRenderedEvents = events;
-        
-        if (events.length === 0) {
-            const locQuery = locationInput.value.trim();
-            const keywordQuery = keywordInput.value.trim();
-            let label = [];
-            if (keywordQuery) label.push(`"${escapeHtml(keywordQuery)}"`);
-            if (locQuery) label.push(`near "${escapeHtml(locQuery)}"`);
-            const labelStr = label.length > 0 ? ` for ${label.join(' ')}` : '';
+    function renderEmptyState() {
+        const context = [];
+        if (keywordInput.value.trim()) context.push(`"${escapeHtml(keywordInput.value.trim())}"`);
+        if (locationInput.value.trim()) context.push(`near "${escapeHtml(locationInput.value.trim())}"`);
 
-            if (locQuery || keywordQuery) {
-                eventsGrid.innerHTML = `
-                    <div class="loading-state">
-                        <div style="margin-bottom: 1.5rem; font-size: 1.2rem; color: var(--text-secondary);">No local events found${labelStr}.</div>
-                        <button onclick="document.getElementById('refreshApifyBtn').click()" class="btn-primary" style="border: none; cursor: pointer; padding: 0.8rem 2rem; font-size: 1rem;">
-                            Deep Fetch from Meetup
-                        </button>
-                    </div>`;
-            } else {
-                eventsGrid.innerHTML = '<div class="loading-state">No events match your criteria.</div>';
-            }
+        const label = context.length > 0 ? ` for ${context.join(' ')}` : '';
+        const savedMessage = showOnlySaved ? ' in saved events' : '';
+
+        eventsGrid.innerHTML = `
+            <div class="loading-state">
+                <div style="margin-bottom: 1rem; font-size: 1.15rem;">No events found${label}${savedMessage}.</div>
+                <button id="emptyStateFetchBtn" class="btn-primary" style="border:none;">Fetch fresh events</button>
+            </div>
+        `;
+
+        document.getElementById('emptyStateFetchBtn').addEventListener('click', () => refreshApifyBtn.click());
+    }
+
+    function renderEvents(events) {
+        lastRenderedEvents = events;
+        eventsGrid.innerHTML = '';
+
+        if (!events.length) {
+            renderEmptyState();
             return;
         }
 
-        events.forEach(event => {
-            const card = createEventCard(event);
-            eventsGrid.appendChild(card);
+        events.forEach((event) => {
+            eventsGrid.appendChild(createEventCard(event));
         });
     }
 
-    // Polling for updates (Socket.IO not available on Vercel)
-    let lastEventCount = 0;
-    setInterval(async () => {
-        try {
-            const response = await fetch('/api/events');
-            if (response.ok) {
-                const data = await response.json();
-                if (data.events && data.events.length > lastEventCount) {
-                    console.log("New events available via polling!");
-                    allEvents = data.events;
-                    applyFiltersAndRender();
-                    updateStats();
-                    lastEventCount = data.events.length;
-                }
-                liveStateEl.innerHTML = '<span class="pulse-dot"></span> Connected';
-            }
-        } catch (error) {
-            liveStateEl.innerHTML = '<span class="pulse-dot offline"></span> Disconnected';
-            console.error('Polling error:', error);
+    function applyFiltersAndRender() {
+        updateSearchSummary();
+        renderEvents(sortEvents(getFilteredEvents()));
+    }
+
+    function showLoadingSkeletons(count = 6) {
+        eventsGrid.innerHTML = '';
+
+        for (let index = 0; index < count; index += 1) {
+            const skeleton = document.createElement('div');
+            skeleton.className = 'skeleton-card';
+            skeleton.innerHTML = `
+                <div class="skeleton-image skeleton"></div>
+                <div class="skeleton-content">
+                    <div class="skeleton-line short skeleton"></div>
+                    <div class="skeleton-line title skeleton"></div>
+                    <div class="skeleton-line skeleton"></div>
+                    <div class="skeleton-line short skeleton"></div>
+                </div>
+            `;
+            eventsGrid.appendChild(skeleton);
         }
-    }, 30000); // Poll every 30 seconds
+    }
 
-    keywordInput.addEventListener('input', () => {
-        applyFiltersAndRender();
+    async function fetchEvents(showSkeleton = true) {
+        try {
+            if (showSkeleton) {
+                showLoadingSkeletons();
+            }
+
+            const response = await fetch('/api/events');
+            const payload = await response.json();
+
+            if (!response.ok) {
+                throw new Error(payload.error || 'Failed to load events');
+            }
+
+            allEvents = Array.isArray(payload.events) ? payload.events : [];
+            lastEventCount = allEvents.length;
+            updateCacheInfo(payload.cache);
+            updateStats();
+            applyFiltersAndRender();
+            setFetchStatus(allEvents.length ? 'Loaded' : 'No Data', allEvents.length ? 'success' : 'idle');
+        } catch (error) {
+            console.error('Error fetching events:', error);
+            eventsGrid.innerHTML = '<div class="loading-state" style="color: #fb7185;">Failed to load events. Please try again later.</div>';
+            setFetchStatus('Load Failed', 'error');
+        }
+    }
+
+    async function triggerApifyFetch(customInput = null) {
+        try {
+            refreshApifyBtn.disabled = true;
+            searchBtn.disabled = true;
+            setFetchStatus('Scraping...', 'loading');
+
+            const response = await fetch('/api/apify/fetch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(customInput || {})
+            });
+
+            const payload = await response.json();
+
+            if (!response.ok) {
+                throw new Error(payload.error || 'Fetch trigger failed');
+            }
+
+            updateCacheInfo(payload.cache);
+            setFetchStatus(`Synced ${payload.eventsCount} events`, 'success');
+            showToast('Fresh events fetched and saved to local JSON', 'success', 2600);
+            await fetchEvents(false);
+        } catch (error) {
+            console.error('Error triggering Apify fetch:', error);
+            setFetchStatus('Fetch Failed', 'error');
+            showToast(error.message, 'error', 2600);
+        } finally {
+            refreshApifyBtn.disabled = false;
+            searchBtn.disabled = false;
+        }
+    }
+
+    function buildApifyPayload() {
+        const keywordQuery = keywordInput.value.trim();
+        const locationQuery = locationInput.value.trim();
+
+        if (!keywordQuery && !locationQuery) {
+            return null;
+        }
+
+        let formattedLocation = locationQuery;
+        if (/jalandhar/i.test(formattedLocation)) {
+            formattedLocation = 'in--India--Jalandhar';
+        } else if (/new york/i.test(formattedLocation)) {
+            formattedLocation = 'us--ny--New York';
+        }
+
+        const searchUrl = `https://www.meetup.com/find/?keywords=${encodeURIComponent(keywordQuery || 'startup')}&location=${encodeURIComponent(formattedLocation || 'us--ny--New York')}&source=EVENTS&distance=anyDistance`;
+
+        return {
+            searchUrls: [searchUrl],
+            maxItems: 50,
+            proxyConfiguration: {
+                useApifyProxy: true,
+                apifyProxyGroups: ['RESIDENTIAL']
+            }
+        };
+    }
+
+    function setActiveChip(targetChip) {
+        document.querySelectorAll('.chip').forEach((chip) => {
+            const isActive = chip === targetChip;
+            chip.classList.toggle('active', isActive);
+            chip.setAttribute('aria-pressed', String(isActive));
+        });
+    }
+
+    document.querySelectorAll('.chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+            setActiveChip(chip);
+
+            const label = chip.textContent.trim().toLowerCase();
+            showOnlySaved = label.includes('saved');
+            activeCategory = label === 'all' || label.includes('saved') ? 'all' : label;
+
+            applyFiltersAndRender();
+        });
     });
 
-    locationInput.addEventListener('input', () => {
-        applyFiltersAndRender();
-    });
+    keywordInput.addEventListener('input', applyFiltersAndRender);
+    locationInput.addEventListener('input', applyFiltersAndRender);
+    sortSelect.addEventListener('change', applyFiltersAndRender);
 
-    const triggerSearchExplicit = (e) => {
-        if (e.type === 'click' || e.key === 'Enter') {
+    const handleSearchAction = (eventObj) => {
+        if (eventObj.type === 'click' || eventObj.key === 'Enter') {
             applyFiltersAndRender();
             document.getElementById('events').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
-    keywordInput.addEventListener('keypress', triggerSearchExplicit);
-    locationInput.addEventListener('keypress', triggerSearchExplicit);
-    searchBtn.addEventListener('click', triggerSearchExplicit);
-
-    // Chip Filtering (Visual only for demo)
-    const chips = document.querySelectorAll('.chip');
-    chips.forEach(chip => {
-        chip.addEventListener('click', () => {
-            chips.forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            
-            // Re-render based on chip category simulation
-            // For now, "All" shows all, others show random subset or full list depending on data
-            const category = chip.innerText.toLowerCase();
-            if (category === 'all') {
-                applyFiltersAndRender();
-            } else {
-                const filtered = allEvents.filter(e => {
-                    const title = (e.name || '').toLowerCase();
-                    const desc = (e.description || '').toLowerCase();
-                    return title.includes(category) || desc.includes(category);
-                });
-                renderEvents(filtered);
-            }
-        });
-    });
-
-    refreshApifyBtn.addEventListener('click', () => {
-        const keywordQuery = keywordInput.value.trim();
-        const locQuery = locationInput.value.trim();
-        let payload = null;
-        
-        if (keywordQuery || locQuery) {
-            let formattedLoc = locQuery;
-            if (formattedLoc.toLowerCase() === 'jalandhar' || formattedLoc.toLowerCase().includes('jalandhar')) {
-                formattedLoc = 'in--India--Jalandhar';
-            } else if (formattedLoc.toLowerCase() === 'new york' || formattedLoc.toLowerCase().includes('new york')) {
-                formattedLoc = 'us--ny--New York';
-            }
-            const keywordsEncoded = encodeURIComponent(keywordQuery || 'startup');
-            const locEncoded = encodeURIComponent(formattedLoc);
-            const url = `https://www.meetup.com/find/?keywords=${keywordsEncoded}&location=${locEncoded}&source=EVENTS&distance=anyDistance`;
-            
-            payload = {
-                searchUrls: [url],
-                maxItems: 50,
-                proxyConfiguration: {
-                    useApifyProxy: true,
-                    apifyProxyGroups: ['RESIDENTIAL']
-                }
-            };
-        }
-        triggerApifyFetch(payload);
-    });
+    keywordInput.addEventListener('keypress', handleSearchAction);
+    locationInput.addEventListener('keypress', handleSearchAction);
+    searchBtn.addEventListener('click', handleSearchAction);
 
     clearSearchBtn.addEventListener('click', () => {
         keywordInput.value = '';
         locationInput.value = '';
+        showOnlySaved = false;
+        activeCategory = 'all';
+        setActiveChip(document.querySelector('.chip'));
         applyFiltersAndRender();
+        showToast('Filters cleared', 'info', 1800);
     });
-    sortSelect.addEventListener('change', applyFiltersAndRender);
+
+    document.querySelectorAll('.quick-tag').forEach((tag) => {
+        tag.addEventListener('click', () => {
+            keywordInput.value = tag.dataset.keyword || '';
+            applyFiltersAndRender();
+            document.getElementById('events').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    refreshApifyBtn.addEventListener('click', () => {
+        triggerApifyFetch(buildApifyPayload());
+    });
+
+    downloadJsonBtn.addEventListener('click', (eventObj) => {
+        if (!cacheInfo?.savedAt) {
+            eventObj.preventDefault();
+            showToast('Fetch events first to create the local JSON cache', 'info', 2400);
+        }
+    });
+
+    const shortcutsBtn = document.getElementById('shortcuts-btn');
+    const shortcutsHelp = document.getElementById('shortcuts-help');
+    const shortcutsClose = document.querySelector('.shortcuts-close');
+
+    function toggleShortcuts() {
+        shortcutsHelp.classList.toggle('active');
+    }
+
+    shortcutsBtn.addEventListener('click', toggleShortcuts);
+    shortcutsClose.addEventListener('click', toggleShortcuts);
+
+    shortcutsHelp.addEventListener('click', (eventObj) => {
+        if (eventObj.target === shortcutsHelp) {
+            toggleShortcuts();
+        }
+    });
+
+    document.addEventListener('keydown', (eventObj) => {
+        if (eventObj.key === '?' || (eventObj.shiftKey && eventObj.key === '/')) {
+            eventObj.preventDefault();
+            toggleShortcuts();
+        }
+
+        if (eventObj.key === 'Escape' && shortcutsHelp.classList.contains('active')) {
+            toggleShortcuts();
+        }
+
+        if ((eventObj.key === 'c' || eventObj.key === 'C') && document.activeElement.tagName !== 'INPUT') {
+            clearSearchBtn.click();
+        }
+    });
+
+    setInterval(async () => {
+        try {
+            const response = await fetch('/api/events');
+            if (!response.ok) {
+                throw new Error('Polling failed');
+            }
+
+            const payload = await response.json();
+            const nextEvents = Array.isArray(payload.events) ? payload.events : [];
+            const hasNewItems = nextEvents.length > lastEventCount;
+
+            allEvents = nextEvents;
+            lastEventCount = nextEvents.length;
+            updateCacheInfo(payload.cache);
+            updateStats();
+            applyFiltersAndRender();
+
+            if (hasNewItems) {
+                showToast('New events detected from the local cache', 'success', 2200);
+            }
+
+            liveStateEl.innerHTML = '<span class="pulse-dot"></span> Connected';
+        } catch (error) {
+            liveStateEl.innerHTML = '<span class="pulse-dot offline"></span> Disconnected';
+            console.error('Polling error:', error);
+        }
+    }, 30000);
 
     setFetchStatus('Idle', 'idle');
-
-    // Initial fetch
+    loadSavedEvents();
+    updateSearchSummary();
+    updateCacheInfo(null);
     fetchEvents();
 });

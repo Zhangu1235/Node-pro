@@ -1,69 +1,137 @@
-# Vercel Deployment Guide for StartupEvents
+# Hosting Guide for StartupEvents
 
-## Environment Variables Setup
+## Pick The Right Host
 
-Before deploying to Vercel, configure these environment variables in your Vercel project settings:
+This app now saves fetched events to a local JSON file.
 
-1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables
-2. Add the following variables:
-   - `APIFY_API_TOKEN` - Your Apify API token
-   - `APIFY_WEBHOOK_SECRET` - Your webhook secret key
-   - `APIFY_ACTOR_ID` - The actor ID (default: 9dardaZ3akeIhRfs3)
+- `Vercel` is fine if you only want the UI and API endpoints.
+- `Vercel` is not fine if you need `events-cache.json` to persist between invocations.
+- `Render` or `Railway` are the better fit if you want the fetched data saved on disk.
 
-## Key Changes for Vercel
+Why:
 
-This project has been configured for Vercel's serverless architecture:
+- Vercel Functions use a read-only filesystem with only temporary writable `/tmp` space.
+- Render web services have an ephemeral filesystem by default, but support persistent disks.
+- Railway supports persistent volumes that you mount into your service.
 
-✅ **Serverless API Routes** - API endpoints are in `/api/handler.js`
-✅ **Removed Socket.IO** - Replaced with polling (incompatible with Vercel serverless)
-✅ **Static File Serving** - Public folder serves static files
-✅ **Vercel Configuration** - `vercel.json` configured for optimal deployment
+## Required Environment Variables
 
-## Deployment Steps
+Set these on any host:
 
-1. **Install Vercel CLI:**
+- `APIFY_API_TOKEN`
+- `APIFY_WEBHOOK_SECRET`
+- `APIFY_ACTOR_ID`
+
+Set this when you want the JSON cache written to a mounted disk or volume:
+
+- `EVENTS_CACHE_DIR`
+
+Examples:
+
+- Local dev: `EVENTS_CACHE_DIR=./data`
+- Render: `EVENTS_CACHE_DIR=/opt/render/project/src/data`
+- Railway: `EVENTS_CACHE_DIR=/data`
+
+## Vercel
+
+Use Vercel only if persistent JSON storage is not required.
+
+1. Install the CLI:
    ```bash
    npm install -g vercel
    ```
-
-2. **Login to Vercel:**
+2. Login:
    ```bash
    vercel login
    ```
-
-3. **Deploy:**
+3. Deploy:
    ```bash
    vercel --prod
    ```
+4. Add `APIFY_API_TOKEN`, `APIFY_WEBHOOK_SECRET`, and `APIFY_ACTOR_ID` in the Vercel dashboard.
 
-4. **Set Environment Variables:**
-   - During deployment, Vercel will prompt you
-   - Or set them in project settings afterward
+Webhook URL:
 
-## Local Testing
+```text
+https://your-app.vercel.app/api/webhooks/apify?secret=YOUR_WEBHOOK_SECRET
+```
+
+Important:
+
+- The app will run.
+- The JSON cache file will not be durable on Vercel.
+
+## Render
+
+Use Render if you want the JSON file to persist.
+
+1. Push this repo to GitHub.
+2. In Render, create a new `Web Service`.
+3. Connect the repo.
+4. Use:
+   - Build command: `npm install`
+   - Start command: `npm start`
+5. Add environment variables:
+   - `APIFY_API_TOKEN`
+   - `APIFY_WEBHOOK_SECRET`
+   - `APIFY_ACTOR_ID`
+   - `EVENTS_CACHE_DIR=/opt/render/project/src/data`
+6. Add a persistent disk and mount it at:
+   ```text
+   /opt/render/project/src/data
+   ```
+7. Deploy.
+
+Webhook URL:
+
+```text
+https://your-app.onrender.com/api/webhooks/apify?secret=YOUR_WEBHOOK_SECRET
+```
+
+## Railway
+
+Use Railway if you want the JSON file to persist.
+
+1. Push this repo to GitHub.
+2. Create a new Railway project from the repo.
+3. Add variables:
+   - `APIFY_API_TOKEN`
+   - `APIFY_WEBHOOK_SECRET`
+   - `APIFY_ACTOR_ID`
+   - `EVENTS_CACHE_DIR=/data`
+4. Add a volume and mount it at:
+   ```text
+   /data
+   ```
+5. Deploy.
+
+Webhook URL:
+
+```text
+https://your-app.up.railway.app/api/webhooks/apify?secret=YOUR_WEBHOOK_SECRET
+```
+
+## Local Test Before Deploy
 
 ```bash
 npm install
 npm run dev
 ```
 
-Visit `http://localhost:3000`
+Then open:
 
-## Polling vs WebSockets
-
-- **Local Development**: Server supports Socket.IO for real-time updates
-- **Vercel Production**: Uses polling (every 30 seconds) since serverless doesn't support WebSockets
-
-## Webhook Configuration
-
-Set your Apify webhook to:
-```
-https://your-vercel-app.vercel.app/api/webhooks/apify?secret=YOUR_WEBHOOK_SECRET
+```text
+http://localhost:3000
 ```
 
-## Troubleshooting
+After a fetch, verify the file exists:
 
-- **Static files not loading**: Ensure `public/` folder is preserved in deployment
-- **API calls failing**: Check environment variables are set in Vercel dashboard
-- **Events not updating**: Verify APIFY_API_TOKEN is correct and has proper permissions
+```text
+data/events-cache.json
+```
 
+## References
+
+- Vercel Functions runtime filesystem: https://vercel.com/docs/functions/runtimes
+- Render persistent disks: https://render.com/docs/disks
+- Railway volumes: https://docs.railway.com/guides/volumes
