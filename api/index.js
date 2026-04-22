@@ -5,29 +5,36 @@ const path = require('path');
 
 const app = express();
 
-// Initialize Apify only if token exists
+// Initialize Apify safely
 let apifyClient = null;
-let ApifyClient = null;
-
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN;
 const APIFY_WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET;
 const APIFY_ACTOR_ID = process.env.APIFY_ACTOR_ID || '9dardaZ3akeIhRfs3';
 
-if (APIFY_API_TOKEN) {
-    try {
-        ApifyClient = require('apify-client').ApifyClient;
+try {
+    if (APIFY_API_TOKEN) {
+        const { ApifyClient } = require('apify-client');
         apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
-    } catch (e) {
-        console.warn('Apify client initialization failed:', e.message);
+        console.log('[API] Apify client initialized');
+    } else {
+        console.log('[API] No APIFY_API_TOKEN provided');
     }
+} catch (error) {
+    console.error('[API] Warning - Apify initialization failed:', error.message);
 }
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from public folder
 const publicPath = path.join(__dirname, '..', 'public');
 app.use(express.static(publicPath));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', apifyReady: !!apifyClient });
+});
 
 // Cache to store Apify events persistently for new visits
 let cachedEvents = [];
@@ -173,7 +180,17 @@ app.get('/api/events', async (req, res) => {
 // Serve index.html for all other routes (SPA routing)
 app.get('*', (req, res) => {
     const indexPath = path.join(publicPath, 'index.html');
-    res.sendFile(indexPath);
+    res.sendFile(indexPath, (err) => {
+        if (err) {
+            res.status(500).send('Error loading page');
+        }
+    });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('[API] Error:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
 module.exports = app;
