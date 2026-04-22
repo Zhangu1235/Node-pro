@@ -10,9 +10,70 @@ document.addEventListener('DOMContentLoaded', () => {
     const eventsCountEl = document.getElementById('eventsCount');
     const lastSyncAtEl = document.getElementById('lastSyncAt');
     const liveStateEl = document.getElementById('liveState');
+    const savedEventsChip = document.getElementById('savedEventsChip');
 
     let allEvents = [];
     let lastRenderedEvents = [];
+    let showOnlySaved = false;
+    let savedEventIds = new Set();
+
+    // Load saved events from localStorage
+    function loadSavedEvents() {
+        const saved = localStorage.getItem('savedEvents');
+        savedEventIds = new Set(saved ? JSON.parse(saved) : []);
+        updateSavedBadge();
+    }
+
+    // Save event to localStorage
+    function saveEvent(eventId) {
+        savedEventIds.add(eventId);
+        localStorage.setItem('savedEvents', JSON.stringify(Array.from(savedEventIds)));
+        updateSavedBadge();
+        // Refresh UI for this event
+        const saveBtn = document.querySelector(`[data-event-id="${eventId}"] .save-event-btn`);
+        if (saveBtn) {
+            saveBtn.classList.add('saved');
+            saveBtn.setAttribute('aria-label', 'Saved event - click to unsave');
+        }
+    }
+
+    // Remove event from localStorage
+    function unsaveEvent(eventId) {
+        savedEventIds.delete(eventId);
+        localStorage.setItem('savedEvents', JSON.stringify(Array.from(savedEventIds)));
+        updateSavedBadge();
+        const saveBtn = document.querySelector(`[data-event-id="${eventId}"] .save-event-btn`);
+        if (saveBtn) {
+            saveBtn.classList.remove('saved');
+            saveBtn.setAttribute('aria-label', 'Save this event');
+        }
+    }
+
+    // Check if event is saved
+    function isEventSaved(eventId) {
+        return savedEventIds.has(eventId);
+    }
+
+    // Update saved events badge
+    function updateSavedBadge() {
+        const count = savedEventIds.size;
+        if (savedEventsChip) {
+            savedEventsChip.setAttribute('data-count', count);
+            if (count > 0) {
+                savedEventsChip.style.opacity = '1';
+            } else {
+                savedEventsChip.style.opacity = '0.5';
+            }
+        }
+    }
+
+    // Filter for saved events only
+    function filterSavedOnly(events) {
+        return events.filter(event => {
+            const eventId = event.id || event.name;
+            return isEventSaved(eventId);
+        });
+    }
 
 
     function formatTimestamp(date = new Date()) {
@@ -155,6 +216,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
+        // Apply saved events filter if active
+        if (showOnlySaved) {
+            filtered = filterSavedOnly(filtered);
+        }
+        
         renderEvents(sortEvents(filtered));
     }
     
@@ -187,28 +253,63 @@ document.addEventListener('DOMContentLoaded', () => {
             imageUrl = img.url;
         }
 
+        // Determine category badge
+        const title_lower = title.toLowerCase();
+        const desc_lower = description.toLowerCase();
+        let badge = 'Networking';
+        if (title_lower.includes('pitch') || desc_lower.includes('pitch')) badge = 'Pitch';
+        if (title_lower.includes('workshop') || desc_lower.includes('workshop')) badge = 'Workshop';
+        if (title_lower.includes('conference') || desc_lower.includes('conference')) badge = 'Conference';
+
+        const eventId = event.id || event.name;
+        const isSaved = isEventSaved(eventId);
+
         const parametersObject = event.rawParameters || event;
         const parametersJson = escapeHtml(JSON.stringify(parametersObject, null, 2) || '{}');
 
         const card = document.createElement('div');
         card.className = isNew ? 'event-card new-realtime-event' : 'event-card';
+        card.setAttribute('data-event-id', eventId);
         
         card.innerHTML = `
-            <div class="event-image" style="background-image: url('${imageUrl}')"></div>
+            <div class="event-image" style="background-image: url('${imageUrl}')">
+                <div class="event-badge">${badge}</div>
+                <button class="save-event-btn ${isSaved ? 'saved' : ''}" 
+                        data-event-id="${eventId}"
+                        aria-label="${isSaved ? 'Saved event - click to unsave' : 'Save this event'}"
+                        title="${isSaved ? 'Unsave event' : 'Save event'}">
+                    <span class="save-icon">${isSaved ? '❤️' : '🤍'}</span>
+                </button>
+            </div>
             <div class="event-content">
                 <div class="event-date">${dateString}</div>
-                <h3 class="event-title">${title}</h3>
-                <p class="event-desc">${description}</p>
+                <h3 class="event-title">${escapeHtml(title)}</h3>
+                <p class="event-desc">${escapeHtml(description)}</p>
                 <div class="event-footer">
-                    <div class="event-location">📍 ${location}</div>
-                    <a href="${event.url || '#'}" target="_blank" style="color: var(--accent-primary); text-decoration: none; font-weight: 600;">Details ↗</a>
+                    <div class="event-location">${escapeHtml(location)}</div>
+                    <a href="${event.url || '#'}" target="_blank" rel="noopener noreferrer" class="event-link">Details ↗</a>
                 </div>
                 <details class="event-params">
-                    <summary>All Parameters</summary>
+                    <summary>Full Details</summary>
                     <pre>${parametersJson}</pre>
                 </details>
             </div>
         `;
+
+        // Add save event listener
+        const saveBtn = card.querySelector('.save-event-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (isEventSaved(eventId)) {
+                    unsaveEvent(eventId);
+                } else {
+                    saveEvent(eventId);
+                }
+            });
+        }
+
         return card;
     }
 

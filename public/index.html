@@ -19,7 +19,7 @@
         <div class="logo"> Startup<span>Events</span></div>
         <div class="nav-links">
             <a href="#">Home</a>
-            <a href="#events">Discover</a>
+            <a href="#events">Discover Events</a>
             <a href="#" class="btn-primary">Post Event</a>
         </div>
     </nav>
@@ -27,17 +27,16 @@
     <header class="hero">
         <div class="hero-content">
             <h1>Discover the next big <span class="gradient-text">Startup</span> event.</h1>
-            <p>Connect with founders, pitch to top-tier VCs, and scale your vision. The best startup events, all in one
-                place.</p>
+            <p>Connect with founders, pitch to top-tier VCs, and scale your vision. The best startup events, all in one place.</p>
             <div class="search-bar">
-                <input type="text" id="keywordInput" placeholder="Keywords: Startup, AI..." style="flex: 1;">
+                <input type="text" id="keywordInput" placeholder="Keywords: Startup, AI, Web3..." style="flex: 1;" aria-label="Search by keywords">
                 <div class="search-divider"></div>
-                <input type="text" id="locationInput" placeholder="Location: Jalandhar, IN" style="flex: 1;">
-                <button class="btn-search">Search</button>
+                <input type="text" id="locationInput" placeholder="Location: Jalandhar, New York..." style="flex: 1;" aria-label="Search by location">
+                <button class="btn-search" aria-label="Search events">Search</button>
             </div>
             <div class="actions-row">
-                <button id="refreshApifyBtn" class="btn-apify">Fetch Fresh Events</button>
-                <span id="fetchStatusPill" class="status-pill">Idle</span>
+                <button id="refreshApifyBtn" class="btn-apify" aria-label="Fetch fresh events from Meetup">📡 Fetch Fresh Events</button>
+                <span id="fetchStatusPill" class="status-pill" role="status" aria-live="polite">Idle</span>
             </div>
 
         </div>
@@ -51,21 +50,21 @@
         <div class="section-header">
             <h2>Upcoming <span class="gradient-text">Events</span></h2>
             <div class="filter-chips">
-                <button class="chip active">All</button>
-                <button class="chip">Networking</button>
-                <button class="chip">Pitch</button>
-                <button class="chip">Workshops</button>
+                <button class="chip active" aria-pressed="true">All</button>
+                <button class="chip" aria-pressed="false">Networking</button>
+                <button class="chip" aria-pressed="false">Pitch</button>
+                <button class="chip" aria-pressed="false">Workshops</button>
             </div>
         </div>
         <div class="events-toolbar">
-            <button id="clearSearchBtn" class="toolbar-btn">Clear Search</button>
-            <select id="sortSelect" class="toolbar-select">
+            <button id="clearSearchBtn" class="toolbar-btn" aria-label="Clear all search filters">✕ Clear Filters</button>
+            <select id="sortSelect" class="toolbar-select" aria-label="Sort events">
                 <option value="date-asc">Sort: Date (Earliest)</option>
                 <option value="date-desc">Sort: Date (Latest)</option>
                 <option value="name-asc">Sort: Name (A-Z)</option>
             </select>
         </div>
-        <div class="stats-panel">
+        <div class="stats-panel" role="region" aria-label="Event statistics">
             <div class="stat-item">
                 <div class="stat-label">Total Events</div>
                 <div class="stat-value" id="eventsCount">0</div>
@@ -80,14 +79,14 @@
             </div>
         </div>
 
-        <div id="events-grid" class="events-grid">
+        <div id="events-grid" class="events-grid" role="main" aria-label="Events listing">
             <!-- Events will be dynamically injected here -->
             <div class="loading-state">Loading amazing events...</div>
         </div>
     </main>
 
     <footer>
-        <p>&copy; 2026 StartupEvents. Empowering the founder ecosystem.</p>
+        <p>&copy; 2026 StartupEvents. Empowering the founder ecosystem. | <a href="#" style="color: var(--accent-primary); text-decoration: none;">Privacy Policy</a> | <a href="#" style="color: var(--accent-primary); text-decoration: none;">Terms of Service</a></p>
     </footer>
 
     <script src="/scripts/app.js"></script>
