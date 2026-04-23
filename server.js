@@ -16,11 +16,13 @@ const PORT = process.env.PORT || 3000;
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN;
 const APIFY_WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET;
 const APIFY_ACTOR_ID = process.env.APIFY_ACTOR_ID || '9dardaZ3akeIhRfs3';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
 const apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
 
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Listen for connections (WebSockets)
 io.on('connection', (socket) => {
@@ -84,6 +86,22 @@ function getDatasetIdFromPayload(payload) {
         payload?.eventData?.resource?.defaultDatasetId ||
         null
     );
+}
+
+function summarizeEventForAssistant(event) {
+    const venue = event?._embedded?.venues?.[0];
+
+    return {
+        id: event.id || null,
+        name: event.name || 'Untitled Event',
+        description: event.description || event.info || '',
+        date: event?.dates?.start?.dateTime || event?.dates?.start?.localDate || null,
+        location: {
+            venue: venue?.name || null,
+            city: venue?.city?.name || null
+        },
+        url: event.url || null
+    };
 }
 
 app.post('/api/apify/fetch', async (req, res) => {
@@ -202,6 +220,92 @@ app.get('/api/events/download', async (req, res) => {
     }
 
     return res.download(cacheMeta.filePath, 'events-cache.json');
+});
+
+app.post('/api/assistant', async (req, res) => {
+    if (!OPENAI_API_KEY) {
+        return res.status(503).json({ error: 'Missing OPENAI_API_KEY in .env' });
+    }
+
+    const {
+        message,
+        filters = {},
+        events = []
+    } = req.body || {};
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+        return res.status(400).json({ error: 'Message is required.' });
+    }
+
+    const safeEvents = Array.isArray(events)
+        ? events.slice(0, 12).map(summarizeEventForAssistant)
+        : [];
+
+    const systemPrompt = [
+        'You are a concise event discovery assistant for a startup events web app.',
+        'Answer using only the provided event data and current filter context.',
+        'Do not invent events, dates, cities, or links.',
+        'Keep answers short and practical, usually 2 to 4 sentences.',
+        'If the user asks for recommendations, name up to 3 events and explain why briefly.',
+        'If there are no strong matches, say that clearly and suggest a better keyword or filter.'
+    ].join(' ');
+
+    try {
+        const response = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: OPENAI_MODEL,
+                input: [
+                    {
+                        role: 'system',
+                        content: [
+                            {
+                                type: 'input_text',
+                                text: systemPrompt
+                            }
+                        ]
+                    },
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'input_text',
+                                text: JSON.stringify({
+                                    message: message.trim(),
+                                    filters,
+                                    events: safeEvents
+                                })
+                            }
+                        ]
+                    }
+                ]
+            })
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+            const errorMessage = payload?.error?.message || 'OpenAI request failed.';
+            return res.status(response.status).json({ error: errorMessage });
+        }
+
+        const text = typeof payload.output_text === 'string'
+            ? payload.output_text.trim()
+            : '';
+
+        if (!text) {
+            return res.status(502).json({ error: 'OpenAI returned an empty response.' });
+        }
+
+        return res.json({ reply: text, model: OPENAI_MODEL });
+    } catch (error) {
+        console.error('Error calling OpenAI Responses API:', error.message);
+        return res.status(500).json({ error: 'Failed to generate assistant reply.' });
+    }
 });
 
 (async () => {

@@ -413,6 +413,61 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${reason} Start with ${picks.map((event) => event.name).join(' • ')}.`;
     }
 
+    async function requestAssistantReply(query) {
+        const filteredEvents = sortEvents(getFilteredEvents())
+            .slice(0, 12)
+            .map((event) => {
+                const venue = event?._embedded?.venues?.[0];
+
+                return {
+                    id: event.id || null,
+                    name: event.name || 'Untitled Event',
+                    description: event.description || event.info || '',
+                    dates: {
+                        start: {
+                            dateTime: event?.dates?.start?.dateTime || event?.dates?.start?.localDate || null
+                        }
+                    },
+                    _embedded: {
+                        venues: [{
+                            name: venue?.name || null,
+                            city: {
+                                name: venue?.city?.name || null
+                            }
+                        }]
+                    },
+                    url: event.url || null
+                };
+            });
+        const filters = {
+            keyword: keywordInput.value.trim(),
+            location: locationInput.value.trim(),
+            savedOnly: showOnlySaved,
+            category: activeCategory,
+            sort: sortSelect.value
+        };
+
+        const response = await fetch('/api/assistant', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: query,
+                filters,
+                events: filteredEvents
+            })
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+            throw new Error(payload.error || 'Assistant request failed');
+        }
+
+        return payload.reply;
+    }
+
     function applyFiltersAndRender() {
         updateSearchSummary();
         renderEvents(sortEvents(getFilteredEvents()));
@@ -586,7 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    assistantForm.addEventListener('submit', (eventObj) => {
+    assistantForm.addEventListener('submit', async (eventObj) => {
         eventObj.preventDefault();
         const query = assistantInput.value.trim();
 
@@ -596,8 +651,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         addAssistantMessage(query, 'user');
-        addAssistantMessage(buildAssistantReply(query), 'bot');
         assistantInput.value = '';
+        assistantInput.disabled = true;
+
+        addAssistantMessage('Thinking through the current event feed...', 'bot');
+        const pendingMessage = assistantMessages.lastElementChild;
+
+        try {
+            const reply = await requestAssistantReply(query);
+            pendingMessage.textContent = reply;
+        } catch (error) {
+            console.error('Assistant request failed:', error);
+            pendingMessage.textContent = buildAssistantReply(query);
+            showToast(error.message, 'info', 2600);
+        } finally {
+            assistantInput.disabled = false;
+            assistantInput.focus();
+        }
     });
 
     const shortcutsBtn = document.getElementById('shortcuts-btn');
