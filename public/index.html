@@ -20,7 +20,6 @@
         <div class="nav-links">
             <a href="#">Home</a>
             <a href="#events">Discover Events</a>
-            <a href="#" class="btn-primary">Post Event</a>
         </div>
     </nav>
 
@@ -62,6 +61,20 @@
         <div class="hero-graphics">
             <div class="glass-orb orb-1"></div>
             <div class="glass-orb orb-2"></div>
+            <aside class="assistant-panel" aria-label="Chat assistance">
+                <div class="assistant-label">Event Copilot</div>
+                <h2>Need a quick event suggestion?</h2>
+                <p id="assistantHint">Ask for AI meetups, saved picks, location ideas, or what to search next.</p>
+                <div id="assistantMessages" class="assistant-messages" role="log" aria-live="polite">
+                    <div class="assistant-message assistant-message-bot">
+                        I can help you narrow the feed. Try “Find me AI events in New York” or “What should I save first?”
+                    </div>
+                </div>
+                <form id="assistantForm" class="assistant-form">
+                    <input id="assistantInput" type="text" placeholder="Ask about the current event list..." aria-label="Ask the event assistant">
+                    <button type="submit" class="btn-primary">Ask</button>
+                </form>
+            </aside>
         </div>
     </header>
 

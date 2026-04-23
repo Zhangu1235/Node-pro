@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const cacheStatusText = document.getElementById('cacheStatusText');
     const cacheFilePath = document.getElementById('cacheFilePath');
     const activeSearchSummary = document.getElementById('activeSearchSummary');
+    const assistantForm = document.getElementById('assistantForm');
+    const assistantInput = document.getElementById('assistantInput');
+    const assistantMessages = document.getElementById('assistantMessages');
+    const assistantHint = document.getElementById('assistantHint');
 
     let allEvents = [];
     let lastRenderedEvents = [];
@@ -153,6 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         activeSearchSummary.textContent = parts.length > 0 ? parts.join(' • ') : 'All startup events';
+        assistantHint.textContent = parts.length > 0
+            ? `Current context: ${parts.join(' • ')}`
+            : 'Ask for AI meetups, saved picks, location ideas, or what to search next.';
     }
 
     function updateCacheInfo(cache) {
@@ -331,6 +338,81 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function addAssistantMessage(text, role = 'bot') {
+        const message = document.createElement('div');
+        message.className = `assistant-message assistant-message-${role}`;
+        message.textContent = text;
+        assistantMessages.appendChild(message);
+        assistantMessages.scrollTop = assistantMessages.scrollHeight;
+    }
+
+    function buildAssistantReply(query) {
+        const normalized = query.trim().toLowerCase();
+        const filteredEvents = sortEvents(getFilteredEvents());
+
+        if (!normalized) {
+            return 'Ask about topics, cities, saved events, or what filters to use next.';
+        }
+
+        if (!allEvents.length) {
+            return 'The feed is empty right now. Fetch fresh events first, then I can suggest the best matches.';
+        }
+
+        if (normalized.includes('saved')) {
+            const savedEvents = filteredEvents.filter((event) => isEventSaved(event.id || event.name)).slice(0, 3);
+            if (!savedEvents.length) {
+                return 'You do not have saved events in the current view yet. Save a few cards and I can rank them back to you.';
+            }
+
+            return `Saved shortlist: ${savedEvents.map((event) => event.name).join(' • ')}.`;
+        }
+
+        if (normalized.includes('location') || normalized.includes('city') || normalized.includes('where')) {
+            const locations = Array.from(new Set(
+                filteredEvents
+                    .map((event) => {
+                        const venue = event?._embedded?.venues?.[0];
+                        return [venue?.city?.name, venue?.name].filter(Boolean).join(', ');
+                    })
+                    .filter(Boolean)
+            )).slice(0, 4);
+
+            return locations.length
+                ? `Strong location signals right now: ${locations.join(' • ')}.`
+                : 'Most current listings are online or missing venue details, so keyword filtering will work better than location.';
+        }
+
+        if (normalized.includes('search') || normalized.includes('keyword') || normalized.includes('filter')) {
+            const hints = ['AI', 'Pitch', 'Founder', 'SaaS', 'Fintech'];
+            const matched = hints.filter((hint) => allEvents.some((event) => `${event.name || ''} ${event.description || ''}`.toLowerCase().includes(hint.toLowerCase())));
+            return matched.length
+                ? `Try these filters next: ${matched.slice(0, 4).join(' • ')}.`
+                : 'Start with broad filters like AI, networking, founder, or workshop, then narrow by city.';
+        }
+
+        const topicTerms = normalized
+            .split(/[^a-z0-9]+/)
+            .filter((term) => term.length > 2);
+
+        const topicalMatches = filteredEvents.filter((event) => {
+            const haystack = `${event.name || ''} ${event.description || event.info || ''}`.toLowerCase();
+            return topicTerms.some((term) => haystack.includes(term));
+        });
+
+        const recommendationPool = topicalMatches.length ? topicalMatches : filteredEvents;
+        const picks = recommendationPool.slice(0, 3);
+
+        if (!picks.length) {
+            return 'No events match that request yet. Clear filters or fetch fresh events and try again.';
+        }
+
+        const reason = topicalMatches.length
+            ? `I found ${topicalMatches.length} topical match${topicalMatches.length === 1 ? '' : 'es'}.`
+            : `I used the ${filteredEvents.length} events in your current filtered feed.`;
+
+        return `${reason} Start with ${picks.map((event) => event.name).join(' • ')}.`;
+    }
+
     function applyFiltersAndRender() {
         updateSearchSummary();
         renderEvents(sortEvents(getFilteredEvents()));
@@ -502,6 +584,20 @@ document.addEventListener('DOMContentLoaded', () => {
             eventObj.preventDefault();
             showToast('Fetch events first to create the local JSON cache', 'info', 2400);
         }
+    });
+
+    assistantForm.addEventListener('submit', (eventObj) => {
+        eventObj.preventDefault();
+        const query = assistantInput.value.trim();
+
+        if (!query) {
+            showToast('Type a quick question for the assistant', 'info', 2000);
+            return;
+        }
+
+        addAssistantMessage(query, 'user');
+        addAssistantMessage(buildAssistantReply(query), 'bot');
+        assistantInput.value = '';
     });
 
     const shortcutsBtn = document.getElementById('shortcuts-btn');

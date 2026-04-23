@@ -76,6 +76,32 @@ body::after {
     animation: orbFloat2 18s ease-in-out infinite reverse;
 }
 
+.glass-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(6px);
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+.orb-1 {
+    width: 180px;
+    height: 180px;
+    top: -30px;
+    right: 80px;
+    background: radial-gradient(circle, rgba(255, 122, 24, 0.4), rgba(255, 122, 24, 0.05) 70%);
+    animation: orbFloat1 14s ease-in-out infinite;
+}
+
+.orb-2 {
+    width: 240px;
+    height: 240px;
+    bottom: -40px;
+    right: -10px;
+    background: radial-gradient(circle, rgba(25, 182, 255, 0.32), rgba(25, 182, 255, 0.05) 72%);
+    animation: orbFloat2 18s ease-in-out infinite;
+}
+
 /* Typography */
 h1, h2, h3 {
     font-family: 'Outfit', sans-serif;
@@ -199,11 +225,106 @@ h1, h2, h3 {
     z-index: 2;
 }
 
+.hero-graphics {
+    flex: 1;
+    min-width: 320px;
+    position: relative;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
 .hero-insights {
     margin-top: 1.5rem;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
+}
+
+.assistant-panel {
+    position: relative;
+    z-index: 2;
+    width: min(100%, 420px);
+    padding: 1.35rem;
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background:
+        linear-gradient(180deg, rgba(10, 17, 31, 0.82), rgba(10, 17, 31, 0.62)),
+        radial-gradient(circle at top right, rgba(25, 182, 255, 0.18), transparent 40%);
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
+    backdrop-filter: blur(18px);
+}
+
+.assistant-label {
+    color: var(--accent-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.assistant-panel h2 {
+    margin-top: 0.6rem;
+    font-size: 1.8rem;
+    line-height: 1.15;
+}
+
+.assistant-panel p {
+    margin: 0.7rem 0 1rem;
+    font-size: 0.95rem;
+}
+
+.assistant-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 180px;
+    max-height: 260px;
+    overflow: auto;
+    padding-right: 0.2rem;
+}
+
+.assistant-message {
+    max-width: 92%;
+    padding: 0.85rem 1rem;
+    border-radius: 18px;
+    font-size: 0.92rem;
+    line-height: 1.55;
+}
+
+.assistant-message-bot {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+
+.assistant-message-user {
+    align-self: flex-end;
+    background: linear-gradient(135deg, rgba(255, 122, 24, 0.92), rgba(25, 182, 255, 0.92));
+    color: white;
+}
+
+.assistant-form {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.assistant-form input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    padding: 0.9rem 1rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.assistant-form input:focus {
+    border-color: rgba(25, 182, 255, 0.45);
+    box-shadow: 0 0 0 4px rgba(25, 182, 255, 0.12);
 }
 
 .insight-card {
@@ -1325,7 +1446,7 @@ footer {
     }
 
     .hero-graphics {
-        display: none;
+        justify-content: center;
     }
 
     .events-grid {
@@ -1369,6 +1490,20 @@ footer {
 
     .hero p {
         max-width: 100%;
+    }
+
+    .hero-graphics {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .assistant-panel {
+        width: 100%;
+        text-align: left;
+    }
+
+    .assistant-form {
+        flex-direction: column;
     }
 
     .hero-insights {
@@ -1445,6 +1580,15 @@ footer {
     .hero p {
         font-size: 1rem;
         margin-bottom: 1.5rem;
+    }
+
+    .assistant-panel {
+        padding: 1rem;
+        border-radius: 22px;
+    }
+
+    .assistant-panel h2 {
+        font-size: 1.45rem;
     }
 
     .hero-badge {
