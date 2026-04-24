@@ -4,11 +4,25 @@ const cors = require('cors');
 const { ApifyClient } = require('apify-client');
 const path = require('path');
 const { loadSnapshot, saveEvents, getStorageInfo } = require('./lib/event-store');
+const { registerUser, loginUser, authMiddleware, verifyToken, refreshToken } = require('./lib/auth');
+const {
+    validateEventQuery,
+    filterEventsByQuery,
+    sortEvents,
+    paginateEvents,
+    getTrendingEvents,
+    getEventSuggestions,
+    createSuccessResponse,
+    createErrorResponse
+} = require('./lib/api-utils');
+const RateLimiter = require('./lib/rate-limiter');
+const { requestLoggingMiddleware, logError, logSuccess } = require('./lib/logger');
 
 const http = require('http');
 const { Server } = require('socket.io');
 
 const app = express();
+app.set('etag', false); // Disable ETags to prevent 304 Not Modified issues with fetch & CORS
 const server = http.createServer(app);
 const io = new Server(server);
 
@@ -18,11 +32,122 @@ const APIFY_WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET;
 const APIFY_ACTOR_ID = process.env.APIFY_ACTOR_ID || '9dardaZ3akeIhRfs3';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '';
 const apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
 
+// Middleware setup
 app.use(cors());
+app.use(requestLoggingMiddleware);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '1mb' }));
+
+// Rate limiting setup (100 requests per 15 minutes)
+const apiLimiter = new RateLimiter(15 * 60 * 1000, 100);
+const strictLimiter = new RateLimiter(60 * 1000, 5); // 5 requests per minute for expensive operations
+
+// Apply rate limiting to API routes
+app.use('/api/', apiLimiter.middleware());
+
+// Root route - serve index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Health check endpoint (no auth required)
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/debug-env', (req, res) => {
+    res.json({
+        hasUrl: !!process.env.SUPABASE_URL,
+        hasKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        keyStart: process.env.SUPABASE_SERVICE_ROLE_KEY ? process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 10) : null
+    });
+});
+
+// Auth endpoints (public - no middleware required)
+app.get('/api/auth/config', (req, res) => {
+    res.json({
+        captcha: {
+            provider: TURNSTILE_SITE_KEY ? 'turnstile' : null,
+            enabled: !!TURNSTILE_SITE_KEY,
+            siteKey: TURNSTILE_SITE_KEY || null
+        }
+    });
+});
+
+app.post('/api/auth/register', async (req, res) => {
+    const { username, email, password, captchaToken = '' } = req.body;
+
+    if (!username || !email || !password) {
+        return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const result = await registerUser(email, password, username, captchaToken);
+    
+    if (!result.success) {
+        return res.status(400).json({ error: result.error });
+    }
+
+    return res.status(201).json(result);
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password, captchaToken = '' } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const result = await loginUser(email, password, captchaToken);
+    
+    if (!result.success) {
+        return res.status(401).json({ error: result.error });
+    }
+
+    return res.json(result);
+});
+
+app.get('/api/auth/verify', authMiddleware, (req, res) => {
+    res.json({ 
+        message: 'Token is valid',
+        user: {
+            id: req.user.id,
+            email: req.user.email
+        }
+    });
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+        return res.status(400).json({ error: 'Refresh token is required' });
+    }
+
+    const result = await refreshToken(refresh_token);
+    
+    if (!result.success) {
+        return res.status(401).json({ error: result.error });
+    }
+
+    return res.json(result);
+});
+
+app.post('/api/auth/logout', authMiddleware, async (req, res) => {
+    // With Supabase, logout is mainly client-side (remove token)
+    // But we can invalidate sessions on the server if needed
+    return res.json({ message: 'Logged out successfully' });
+});
+
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 
 // Listen for connections (WebSockets)
 io.on('connection', (socket) => {
@@ -46,8 +171,7 @@ const defaultActorInput = {
     ],
     maxItems: 50,
     proxyConfiguration: {
-        useApifyProxy: true,
-        apifyProxyGroups: ['RESIDENTIAL']
+        useApifyProxy: true
     }
 };
 
@@ -104,7 +228,7 @@ function summarizeEventForAssistant(event) {
     };
 }
 
-app.post('/api/apify/fetch', async (req, res) => {
+app.post('/api/apify/fetch', authMiddleware, async (req, res) => {
     if (!APIFY_API_TOKEN) {
         return res.status(400).json({ error: 'Missing APIFY_API_TOKEN in .env' });
     }
@@ -205,24 +329,207 @@ app.post('/api/webhooks/apify', express.text({type: '*/*'}), async (req, res) =>
     res.status(200).send("Apify Webhook Processed!");
 });
 
-app.get('/api/events', async (req, res) => {
-    // Serve our magically cached Apify events!
-    // If empty, frontend shows "No events", but once the webhook hits, it works!
-    return res.json({
-        events: cachedEvents,
-        cache: cacheMeta
-    });
-});
+// Enhanced /api/events endpoint with filtering, sorting, and pagination
+app.get('/api/events', authMiddleware, async (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'no-store');
+        const validation = validateEventQuery(req.query);
+        
+        if (!validation.isValid) {
+            return res.status(400).json({
+                error: 'Invalid query parameters',
+                details: validation.errors
+            });
+        }
 
-app.get('/api/events/download', async (req, res) => {
-    if (!cacheMeta.filePath) {
-        return res.status(404).json({ error: 'No local JSON cache available yet.' });
+        // Apply filters
+        let filteredEvents = filterEventsByQuery(cachedEvents, {
+            keyword: req.query.keyword,
+            location: req.query.location,
+            eventType: req.query.eventType
+        });
+
+        // Apply sorting
+        const sortedEvents = sortEvents(filteredEvents, req.query.sortBy || 'date-asc');
+
+        // Apply pagination
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+        const offset = parseInt(req.query.offset) || 0;
+        const paginated = paginateEvents(sortedEvents, limit, offset);
+
+        return res.json({
+            success: true,
+            events: paginated.events,
+            pagination: {
+                total: paginated.total,
+                limit: paginated.limit,
+                offset: paginated.offset,
+                hasMore: paginated.hasMore
+            },
+            cache: cacheMeta
+        });
+    } catch (error) {
+        logError(error, '/api/events');
+        return res.status(500).json({
+            error: 'Failed to fetch events',
+            message: error.message
+        });
     }
-
-    return res.download(cacheMeta.filePath, 'events-cache.json');
 });
 
-app.post('/api/assistant', async (req, res) => {
+app.get('/api/events/download', authMiddleware, async (req, res) => {
+    try {
+        if (!cacheMeta.filePath) {
+            return res.status(404).json({ error: 'No local JSON cache available yet.' });
+        }
+
+        return res.download(cacheMeta.filePath, 'events-cache.json');
+    } catch (error) {
+        logError(error, '/api/events/download');
+        return res.status(500).json({ error: 'Failed to download events' });
+    }
+});
+
+// Trending events endpoint
+app.get('/api/events/trending', authMiddleware, async (req, res) => {
+    try {
+        const days = Math.min(parseInt(req.query.days) || 7, 90);
+        const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+        
+        const trendingEvents = getTrendingEvents(cachedEvents, days);
+        const topEvents = trendingEvents.slice(0, limit);
+        
+        return res.json({
+            success: true,
+            events: topEvents,
+            total: trendingEvents.length,
+            limit,
+            timeframe: `${days} days`,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        logError(error, '/api/events/trending');
+        return res.status(500).json({ error: 'Failed to fetch trending events' });
+    }
+});
+
+// Event suggestions endpoint (search-as-you-type)
+app.get('/api/events/suggestions', authMiddleware, async (req, res) => {
+    try {
+        const { query = '' } = req.query;
+        const limit = Math.min(parseInt(req.query.limit) || 5, 20);
+        
+        if (!query || query.trim().length < 2) {
+            return res.json({
+                success: true,
+                suggestions: [],
+                message: 'Query must be at least 2 characters'
+            });
+        }
+        
+        const suggestions = getEventSuggestions(cachedEvents, query, limit);
+        
+        return res.json({
+            success: true,
+            query: query.trim(),
+            suggestions: suggestions.map(event => ({
+                id: event.id || event.name,
+                name: event.name,
+                description: event.description?.substring(0, 100) + '...',
+                location: event?._embedded?.venues?.[0]?.city?.name || 'Unknown',
+                date: event?.dates?.start?.dateTime || event?.dates?.start?.localDate
+            })),
+            count: suggestions.length
+        });
+    } catch (error) {
+        logError(error, '/api/events/suggestions');
+        return res.status(500).json({ error: 'Failed to fetch suggestions' });
+    }
+});
+
+// Bulk operations endpoint
+app.post('/api/events/bulk', strictLimiter.middleware(), authMiddleware, async (req, res) => {
+    try {
+        const { action, eventIds = [] } = req.body;
+        
+        if (!action || !Array.isArray(eventIds) || eventIds.length === 0) {
+            return res.status(400).json({
+                error: 'Invalid request',
+                message: 'action and eventIds (array) are required'
+            });
+        }
+
+        if (eventIds.length > 50) {
+            return res.status(400).json({
+                error: 'Too many events',
+                message: 'Maximum 50 events per bulk operation'
+            });
+        }
+
+        // Find events matching the IDs
+        const matchedEvents = cachedEvents.filter(event => 
+            eventIds.includes(event.id || event.name)
+        );
+
+        switch (action) {
+            case 'export':
+                return res.json({
+                    success: true,
+                    action: 'export',
+                    events: matchedEvents,
+                    count: matchedEvents.length,
+                    timestamp: new Date().toISOString()
+                });
+
+            case 'summary':
+                const summary = {
+                    totalCount: matchedEvents.length,
+                    eventsByType: {},
+                    eventsByLocation: {},
+                    dateRange: {
+                        earliest: null,
+                        latest: null
+                    }
+                };
+
+                matchedEvents.forEach(event => {
+                    // Count by type
+                    const type = event.name?.includes('Workshop') ? 'workshop' : 'other';
+                    summary.eventsByType[type] = (summary.eventsByType[type] || 0) + 1;
+
+                    // Count by location
+                    const location = event?._embedded?.venues?.[0]?.city?.name || 'Unknown';
+                    summary.eventsByLocation[location] = (summary.eventsByLocation[location] || 0) + 1;
+
+                    // Track date range
+                    const eventDate = new Date(event?.dates?.start?.dateTime || event?.dates?.start?.localDate);
+                    if (!summary.dateRange.earliest || eventDate < summary.dateRange.earliest) {
+                        summary.dateRange.earliest = eventDate;
+                    }
+                    if (!summary.dateRange.latest || eventDate > summary.dateRange.latest) {
+                        summary.dateRange.latest = eventDate;
+                    }
+                });
+
+                return res.json({
+                    success: true,
+                    action: 'summary',
+                    summary
+                });
+
+            default:
+                return res.status(400).json({
+                    error: 'Unknown action',
+                    message: 'action must be one of: export, summary'
+                });
+        }
+    } catch (error) {
+        logError(error, '/api/events/bulk');
+        return res.status(500).json({ error: 'Bulk operation failed' });
+    }
+});
+
+app.post('/api/assistant', authMiddleware, async (req, res) => {
     if (!GEMINI_API_KEY) {
         return res.status(503).json({ error: 'Missing GEMINI_API_KEY in .env' });
     }
@@ -321,5 +628,28 @@ app.post('/api/assistant', async (req, res) => {
 })();
 
 server.listen(PORT, () => {
-    console.log(`Server running purely on API requests + WebSockets at http://localhost:${PORT}`);
+    console.log(`\n✓ Server running at http://localhost:${PORT}`);
+    console.log('✓ WebSockets enabled for real-time events');
+    console.log('✓ Rate limiting active: 100 req/15min per IP');
+    console.log('✓ Advanced API endpoints enabled\n');
+});
+
+// Periodic cleanup of rate limiter to prevent memory leak
+setInterval(() => {
+    apiLimiter.cleanup();
+    strictLimiter.cleanup();
+}, 60 * 1000); // Run every minute
+
+// Catch-all 404 handler - must be last
+app.use((req, res) => {
+    res.status(404).send('404 page not found');
+});
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+        console.log('Server shut down');
+        process.exit(0);
+    });
 });

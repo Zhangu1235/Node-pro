@@ -11,6 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="/styles/design-system.css">
     <link rel="stylesheet" href="/styles/main.css">
 </head>
 
@@ -20,6 +21,16 @@
         <div class="nav-links">
             <a href="#">Home</a>
             <a href="#events">Discover Events</a>
+            <div id="userMenuContainer" class="user-menu-container" style="display: none;">
+                <button id="userMenuBtn" class="user-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false">
+                    <span id="userName">Account</span>
+                    <span class="caret">▾</span>
+                </button>
+                <div id="userDropdown" class="user-dropdown" role="menu">
+                    <button id="logoutBtn" class="user-dropdown-item" type="button" role="menuitem">Logout</button>
+                </div>
+            </div>
+            <a id="loginLink" href="/login.html" class="login-btn" style="display: none;">Sign In</a>
         </div>
     </nav>
 
@@ -150,6 +161,16 @@
     <!-- Keyboard Shortcuts Toggle -->
     <button id="shortcuts-btn" class="shortcuts-btn" title="Show keyboard shortcuts" aria-label="Show keyboard shortcuts">?</button>
 
+    <script>
+        // Auth check and UI setup
+        (function() {
+            // Note: Auth token handling is now done by auth.js and app.js
+            // This inline script is kept for backward compatibility
+            // The main auth logic runs in DOMContentLoaded event
+        })();
+    </script>
+
+    <script src="/scripts/auth.js?v=3"></script>
     <script src="/scripts/app.js"></script>
 </body>
 

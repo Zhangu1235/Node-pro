@@ -1,4 +1,85 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Authentication UI
+    const initAuth = () => {
+        try {
+            if (typeof AuthClient === 'undefined') {
+                console.warn('AuthClient not loaded yet, retrying in 100ms');
+                setTimeout(initAuth, 100);
+                return;
+            }
+
+            const userMenuContainer = document.getElementById('userMenuContainer');
+            const userMenuBtn = document.getElementById('userMenuBtn');
+            const userDropdown = document.getElementById('userDropdown');
+            const userName = document.getElementById('userName');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const loginLink = document.getElementById('loginLink');
+            
+            try {
+                const currentUser = AuthClient.getUser();
+
+                if (!currentUser || !AuthClient.isAuthenticated()) {
+                    // User not logged in, hide user display and show login link
+                    if (userMenuContainer) userMenuContainer.style.display = 'none';
+                    if (loginLink) loginLink.style.display = 'inline-block';
+                } else {
+                    // User logged in, show user info and hide login link
+                    if (loginLink) loginLink.style.display = 'none';
+                    if (userMenuContainer) {
+                        userMenuContainer.style.display = 'block';
+                        if (userName) {
+                            userName.textContent = currentUser.username || currentUser.email || 'Account';
+                        }
+                    }
+
+                    if (userMenuBtn && userDropdown) {
+                        const closeDropdown = () => {
+                            userDropdown.classList.remove('open');
+                            userMenuBtn.setAttribute('aria-expanded', 'false');
+                        };
+
+                        userMenuBtn.addEventListener('click', (eventObj) => {
+                            eventObj.preventDefault();
+                            eventObj.stopPropagation();
+                            const isOpen = userDropdown.classList.toggle('open');
+                            userMenuBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                        });
+
+                        document.addEventListener('click', (eventObj) => {
+                            if (!userMenuContainer.contains(eventObj.target)) {
+                                closeDropdown();
+                            }
+                        });
+
+                        document.addEventListener('keydown', (eventObj) => {
+                            if (eventObj.key === 'Escape') {
+                                closeDropdown();
+                            }
+                        });
+                    }
+
+                    // Handle logout
+                    if (logoutBtn) {
+                        logoutBtn.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            const result = await AuthClient.logout();
+                            if (result.success) {
+                                window.location.href = '/login.html';
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error accessing AuthClient:', error);
+            }
+        } catch (error) {
+            console.error('Auth initialization error:', error);
+        }
+    };
+
+    // Initialize auth UI first with a small delay to ensure scripts are loaded
+    setTimeout(initAuth, 50);
+
     const eventsGrid = document.getElementById('events-grid');
     const keywordInput = document.getElementById('keywordInput');
     const locationInput = document.getElementById('locationInput');
@@ -455,7 +536,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch('/api/assistant', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...AuthClient.getAuthHeaders()
             },
             body: JSON.stringify({
                 message: query,
@@ -502,11 +584,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchEvents(showSkeleton = true) {
         try {
+            if (!AuthClient.isAuthenticated()) {
+                eventsGrid.innerHTML = `
+                    <div class="glass-card" style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 2rem; text-align: center; background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; margin: 2rem 0;">
+                        <div style="width: 64px; height: 64px; background: rgba(157, 78, 221, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem; border: 1px solid rgba(157, 78, 221, 0.4);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9d4edd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.5rem; color: #f8fafc; margin-bottom: 0.75rem; font-family: 'Outfit', sans-serif; font-weight: 600;">Sign In Required</h3>
+                        <p style="color: #94a3b8; max-width: 400px; margin-bottom: 2rem; font-size: 1.05rem; line-height: 1.5;">Discover premium startup events, network with founders, and build your journey. Join the ecosystem today.</p>
+                        <a href="/login.html" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 500;">Sign In to Discover</a>
+                    </div>
+                `;
+                setFetchStatus('Auth Required', 'idle');
+                return;
+            }
+
             if (showSkeleton) {
                 showLoadingSkeletons();
             }
 
-            const response = await fetch('/api/events');
+            const response = await fetch('/api/events', {
+                headers: {
+                    ...AuthClient.getAuthHeaders()
+                }
+            });
             const payload = await response.json();
 
             if (!response.ok) {
@@ -521,20 +625,29 @@ document.addEventListener('DOMContentLoaded', () => {
             setFetchStatus(allEvents.length ? 'Loaded' : 'No Data', allEvents.length ? 'success' : 'idle');
         } catch (error) {
             console.error('Error fetching events:', error);
-            eventsGrid.innerHTML = '<div class="loading-state" style="color: #fb7185;">Failed to load events. Please try again later.</div>';
+            eventsGrid.innerHTML = `<div class="loading-state" style="color: #fb7185;">Failed to load events: ${escapeHtml(error.message)}. Please try again later.</div>`;
             setFetchStatus('Load Failed', 'error');
         }
     }
 
     async function triggerApifyFetch(customInput = null) {
         try {
+            if (!AuthClient.isAuthenticated()) {
+                showToast('Please sign in to fetch fresh events', 'error', 2600);
+                window.location.href = '/login.html';
+                return;
+            }
+
             refreshApifyBtn.disabled = true;
             searchBtn.disabled = true;
             setFetchStatus('Scraping...', 'loading');
 
             const response = await fetch('/api/apify/fetch', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...AuthClient.getAuthHeaders()
+                },
                 body: JSON.stringify(customInput || {})
             });
 
@@ -579,8 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
             searchUrls: [searchUrl],
             maxItems: 50,
             proxyConfiguration: {
-                useApifyProxy: true,
-                apifyProxyGroups: ['RESIDENTIAL']
+                useApifyProxy: true
             }
         };
     }
@@ -642,10 +754,45 @@ document.addEventListener('DOMContentLoaded', () => {
         triggerApifyFetch(buildApifyPayload());
     });
 
-    downloadJsonBtn.addEventListener('click', (eventObj) => {
+    downloadJsonBtn.addEventListener('click', async (eventObj) => {
+        eventObj.preventDefault();
+        
+        if (!AuthClient.isAuthenticated()) {
+            showToast('Please sign in to download events', 'error', 2600);
+            return;
+        }
+
         if (!cacheInfo?.savedAt) {
-            eventObj.preventDefault();
             showToast('Fetch events first to create the local JSON cache', 'info', 2400);
+            return;
+        }
+
+        try {
+            showToast('Preparing download...', 'info', 1000);
+            const response = await fetch('/api/events/download', {
+                headers: {
+                    ...AuthClient.getAuthHeaders()
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Download failed');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'events-cache.json';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Download error:', error);
+            showToast(`Download failed: ${error.message}`, 'error', 2600);
         }
     });
 
@@ -712,7 +859,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setInterval(async () => {
         try {
-            const response = await fetch('/api/events');
+            if (!AuthClient.isAuthenticated()) return;
+
+            const response = await fetch('/api/events', {
+                headers: {
+                    ...AuthClient.getAuthHeaders()
+                }
+            });
             if (!response.ok) {
                 throw new Error('Polling failed');
             }
