@@ -11,6 +11,8 @@ let apifyClient = null;
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN;
 const APIFY_WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET;
 const APIFY_ACTOR_ID = process.env.APIFY_ACTOR_ID || '9dardaZ3akeIhRfs3';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
 try {
     if (APIFY_API_TOKEN) {
@@ -91,6 +93,22 @@ function getDatasetIdFromPayload(payload) {
         payload?.eventData?.resource?.defaultDatasetId ||
         null
     );
+}
+
+function summarizeEventForAssistant(event) {
+    const venue = event?._embedded?.venues?.[0];
+
+    return {
+        id: event.id || null,
+        name: event.name || 'Untitled Event',
+        description: event.description || event.info || '',
+        date: event?.dates?.start?.dateTime || event?.dates?.start?.localDate || null,
+        location: {
+            venue: venue?.name || null,
+            city: venue?.city?.name || null
+        },
+        url: event.url || null
+    };
 }
 
 app.post('/api/apify/fetch', async (req, res) => {
@@ -207,8 +225,96 @@ app.get('/api/events/download', async (req, res) => {
     return res.download(cacheMeta.filePath, 'events-cache.json');
 });
 
+app.post('/api/assistant', async (req, res) => {
+    if (!GEMINI_API_KEY) {
+        return res.status(503).json({ error: 'Missing GEMINI_API_KEY in environment variables.' });
+    }
+
+    const {
+        message,
+        filters = {},
+        events = []
+    } = req.body || {};
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+        return res.status(400).json({ error: 'Message is required.' });
+    }
+
+    const safeEvents = Array.isArray(events)
+        ? events.slice(0, 12).map(summarizeEventForAssistant)
+        : [];
+
+    const systemPrompt = [
+        'You are a concise chatbot for a startup events web app.',
+        'First understand the user question or problem, then answer it directly.',
+        'Use the provided event data and current filter context when the question is about events, recommendations, cities, dates, saved items, or search strategy.',
+        'Do not invent specific events, dates, cities, or links that are not in the provided event data.',
+        'If event data is missing or weak, still help the user by suggesting practical search terms, filters, or next steps.',
+        'If the question is outside event discovery, give a short helpful answer and connect it back to how the app can help when relevant.',
+        'Keep answers short and practical, usually 2 to 4 sentences.'
+    ].join(' ');
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': GEMINI_API_KEY
+            },
+            body: JSON.stringify({
+                systemInstruction: {
+                    parts: [
+                        {
+                            text: systemPrompt
+                        }
+                    ]
+                },
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            {
+                                text: JSON.stringify({
+                                    message: message.trim(),
+                                    filters,
+                                    events: safeEvents
+                                })
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.4,
+                    maxOutputTokens: 512
+                }
+            })
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+            const errorMessage = payload?.error?.message || 'Gemini request failed.';
+            return res.status(response.status).json({ error: errorMessage });
+        }
+
+        const text = (payload?.candidates?.[0]?.content?.parts || [])
+            .map((part) => part.text || '')
+            .join('')
+            .trim();
+
+        if (!text) {
+            return res.status(502).json({ error: 'Gemini returned an empty response.' });
+        }
+
+        return res.json({ reply: text, model: GEMINI_MODEL });
+    } catch (error) {
+        console.error('Error calling Gemini API:', error.message);
+        return res.status(500).json({ error: 'Failed to generate assistant reply.' });
+    }
+});
+
 // Serve index.html for all other routes (SPA routing)
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
     const indexPath = path.join(publicPath, 'index.html');
     res.sendFile(indexPath, (err) => {
         if (err) {

@@ -355,7 +355,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!allEvents.length) {
-            return 'The feed is empty right now. Fetch fresh events first, then I can suggest the best matches.';
+            const requestedTopic = query.trim().replace(/[?.!]+$/, '');
+            return `I understand you are asking about "${requestedTopic}". The event feed is empty right now, so I cannot match it to real listings yet. Fetch fresh events, or try a focused search term like AI, founder, pitch, funding, SaaS, or workshop.`;
         }
 
         if (normalized.includes('saved')) {
@@ -388,6 +389,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return matched.length
                 ? `Try these filters next: ${matched.slice(0, 4).join(' • ')}.`
                 : 'Start with broad filters like AI, networking, founder, or workshop, then narrow by city.';
+        }
+
+        if (normalized.includes('help') || normalized.includes('problem') || normalized.includes('issue') || normalized.includes('how')) {
+            return 'I can help turn that into an event search. Tell me the topic, city, and goal, for example “AI networking in New York” or “pitch events for founders,” and I will rank the best matching events from the current feed.';
         }
 
         const topicTerms = normalized
@@ -459,7 +464,10 @@ document.addEventListener('DOMContentLoaded', () => {
             })
         });
 
-        const payload = await response.json();
+        const contentType = response.headers.get('content-type') || '';
+        const payload = contentType.includes('application/json')
+            ? await response.json()
+            : { error: await response.text() };
 
         if (!response.ok) {
             throw new Error(payload.error || 'Assistant request failed');

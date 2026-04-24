@@ -16,8 +16,8 @@ const PORT = process.env.PORT || 3000;
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN;
 const APIFY_WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET;
 const APIFY_ACTOR_ID = process.env.APIFY_ACTOR_ID || '9dardaZ3akeIhRfs3';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 const apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
 
 app.use(cors());
@@ -223,8 +223,8 @@ app.get('/api/events/download', async (req, res) => {
 });
 
 app.post('/api/assistant', async (req, res) => {
-    if (!OPENAI_API_KEY) {
-        return res.status(503).json({ error: 'Missing OPENAI_API_KEY in .env' });
+    if (!GEMINI_API_KEY) {
+        return res.status(503).json({ error: 'Missing GEMINI_API_KEY in .env' });
     }
 
     const {
@@ -242,38 +242,35 @@ app.post('/api/assistant', async (req, res) => {
         : [];
 
     const systemPrompt = [
-        'You are a concise event discovery assistant for a startup events web app.',
-        'Answer using only the provided event data and current filter context.',
-        'Do not invent events, dates, cities, or links.',
-        'Keep answers short and practical, usually 2 to 4 sentences.',
-        'If the user asks for recommendations, name up to 3 events and explain why briefly.',
-        'If there are no strong matches, say that clearly and suggest a better keyword or filter.'
+        'You are a concise chatbot for a startup events web app.',
+        'First understand the user question or problem, then answer it directly.',
+        'Use the provided event data and current filter context when the question is about events, recommendations, cities, dates, saved items, or search strategy.',
+        'Do not invent specific events, dates, cities, or links that are not in the provided event data.',
+        'If event data is missing or weak, still help the user by suggesting practical search terms, filters, or next steps.',
+        'If the question is outside event discovery, give a short helpful answer and connect it back to how the app can help when relevant.',
+        'Keep answers short and practical, usually 2 to 4 sentences.'
     ].join(' ');
 
     try {
-        const response = await fetch('https://api.openai.com/v1/responses', {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${OPENAI_API_KEY}`
+                'x-goog-api-key': GEMINI_API_KEY
             },
             body: JSON.stringify({
-                model: OPENAI_MODEL,
-                input: [
-                    {
-                        role: 'system',
-                        content: [
-                            {
-                                type: 'input_text',
-                                text: systemPrompt
-                            }
-                        ]
-                    },
+                systemInstruction: {
+                    parts: [
+                        {
+                            text: systemPrompt
+                        }
+                    ]
+                },
+                contents: [
                     {
                         role: 'user',
-                        content: [
+                        parts: [
                             {
-                                type: 'input_text',
                                 text: JSON.stringify({
                                     message: message.trim(),
                                     filters,
@@ -282,28 +279,33 @@ app.post('/api/assistant', async (req, res) => {
                             }
                         ]
                     }
-                ]
+                ],
+                generationConfig: {
+                    temperature: 0.4,
+                    maxOutputTokens: 512
+                }
             })
         });
 
         const payload = await response.json();
 
         if (!response.ok) {
-            const errorMessage = payload?.error?.message || 'OpenAI request failed.';
+            const errorMessage = payload?.error?.message || 'Gemini request failed.';
             return res.status(response.status).json({ error: errorMessage });
         }
 
-        const text = typeof payload.output_text === 'string'
-            ? payload.output_text.trim()
-            : '';
+        const text = (payload?.candidates?.[0]?.content?.parts || [])
+            .map((part) => part.text || '')
+            .join('')
+            .trim();
 
         if (!text) {
-            return res.status(502).json({ error: 'OpenAI returned an empty response.' });
+            return res.status(502).json({ error: 'Gemini returned an empty response.' });
         }
 
-        return res.json({ reply: text, model: OPENAI_MODEL });
+        return res.json({ reply: text, model: GEMINI_MODEL });
     } catch (error) {
-        console.error('Error calling OpenAI Responses API:', error.message);
+        console.error('Error calling Gemini API:', error.message);
         return res.status(500).json({ error: 'Failed to generate assistant reply.' });
     }
 });
