@@ -1,4 +1,39 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Authentication UI
+    const initAuth = () => {
+        const userDisplay = document.getElementById('userDisplay');
+        const userName = document.getElementById('userName');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const currentUser = AuthClient.getUser();
+
+        if (!currentUser) {
+            // User not logged in, hide user display
+            if (userDisplay) userDisplay.style.display = 'none';
+        } else {
+            // User logged in, show user info
+            if (userDisplay) {
+                userDisplay.style.display = 'flex';
+                if (userName) {
+                    userName.textContent = `Welcome, ${currentUser.username || currentUser.email}!`;
+                }
+            }
+
+            // Handle logout
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const result = await AuthClient.logout();
+                    if (result.success) {
+                        window.location.href = '/login.html';
+                    }
+                });
+            }
+        }
+    };
+
+    // Initialize auth UI first
+    initAuth();
+
     const eventsGrid = document.getElementById('events-grid');
     const keywordInput = document.getElementById('keywordInput');
     const locationInput = document.getElementById('locationInput');
@@ -506,7 +541,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 showLoadingSkeletons();
             }
 
-            const response = await fetch('/api/events');
+            const response = await fetch('/api/events', {
+                headers: {
+                    ...AuthClient.getAuthHeaders()
+                }
+            });
             const payload = await response.json();
 
             if (!response.ok) {
@@ -712,7 +751,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setInterval(async () => {
         try {
-            const response = await fetch('/api/events');
+            const response = await fetch('/api/events', {
+                headers: {
+                    ...AuthClient.getAuthHeaders()
+                }
+            });
             if (!response.ok) {
                 throw new Error('Polling failed');
             }
