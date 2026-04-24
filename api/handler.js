@@ -1,31 +1,3 @@
-// reCAPTCHA verification endpoint
-const fetch = require('node-fetch');
-
-app.post('/api/verify-captcha', async (req, res) => {
-    const { token } = req.body;
-    if (!token) {
-        return res.status(400).json({ success: false, error: 'No captcha token provided.' });
-    }
-    const secret = process.env.RECAPTCHA_SECRET_KEY;
-    if (!secret) {
-        return res.status(500).json({ success: false, error: 'Captcha secret not configured.' });
-    }
-    try {
-        const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `secret=${secret}&response=${token}`
-        });
-        const data = await response.json();
-        if (data.success) {
-            return res.json({ success: true });
-        } else {
-            return res.status(400).json({ success: false, error: 'Captcha verification failed.' });
-        }
-    } catch (err) {
-        return res.status(500).json({ success: false, error: 'Captcha verification error.' });
-    }
-});
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');

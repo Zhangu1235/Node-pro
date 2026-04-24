@@ -32,6 +32,7 @@ const APIFY_WEBHOOK_SECRET = process.env.APIFY_WEBHOOK_SECRET;
 const APIFY_ACTOR_ID = process.env.APIFY_ACTOR_ID || '9dardaZ3akeIhRfs3';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '';
 const apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
 
 // Middleware setup
@@ -66,8 +67,18 @@ app.get('/api/debug-env', (req, res) => {
 });
 
 // Auth endpoints (public - no middleware required)
+app.get('/api/auth/config', (req, res) => {
+    res.json({
+        captcha: {
+            provider: TURNSTILE_SITE_KEY ? 'turnstile' : null,
+            enabled: !!TURNSTILE_SITE_KEY,
+            siteKey: TURNSTILE_SITE_KEY || null
+        }
+    });
+});
+
 app.post('/api/auth/register', async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, captchaToken = '' } = req.body;
 
     if (!username || !email || !password) {
         return res.status(400).json({ error: 'Username, email, and password are required' });
@@ -77,7 +88,7 @@ app.post('/api/auth/register', async (req, res) => {
         return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    const result = await registerUser(email, password, username);
+    const result = await registerUser(email, password, username, captchaToken);
     
     if (!result.success) {
         return res.status(400).json({ error: result.error });
@@ -87,13 +98,13 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, captchaToken = '' } = req.body;
 
     if (!email || !password) {
         return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const result = await loginUser(email, password);
+    const result = await loginUser(email, password, captchaToken);
     
     if (!result.success) {
         return res.status(401).json({ error: result.error });

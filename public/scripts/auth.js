@@ -5,6 +5,17 @@ const AUTH_TOKEN_KEY = 'startup-events-auth-token';
 const REFRESH_TOKEN_KEY = 'startup-events-refresh-token';
 const USER_KEY = 'startup-events-user';
 
+function normalizeAuthErrorMessage(message) {
+    if (!message) return 'Authentication failed';
+
+    const lower = String(message).toLowerCase();
+    if (lower.includes('captcha')) {
+        return 'Captcha verification failed. In Supabase, disable Auth Bot Protection or configure captcha correctly.';
+    }
+
+    return message;
+}
+
 /**
  * Authentication utilities for frontend
  */
@@ -12,7 +23,7 @@ const AuthClient = window.AuthClient = {
     /**
      * Register a new user
      */
-    async signup(email, password, username) {
+    async signup(email, password, username, captchaToken = '') {
         try {
             const response = await fetch('/api/auth/register', {
                 method: 'POST',
@@ -22,14 +33,15 @@ const AuthClient = window.AuthClient = {
                 body: JSON.stringify({
                     email,
                     password,
-                    username
+                    username,
+                    captchaToken
                 })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Signup failed');
+                throw new Error(normalizeAuthErrorMessage(data.error || 'Signup failed'));
             }
 
             // Store user info (not tokens for security)
@@ -38,27 +50,27 @@ const AuthClient = window.AuthClient = {
             return { success: true, user: data.user };
         } catch (error) {
             console.error('Signup error:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: normalizeAuthErrorMessage(error.message) };
         }
     },
 
     /**
      * Login user
      */
-    async login(email, password) {
+    async login(email, password, captchaToken = '') {
         try {
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ email, password })
+                body: JSON.stringify({ email, password, captchaToken })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Login failed');
+                throw new Error(normalizeAuthErrorMessage(data.error || 'Login failed'));
             }
 
             // Store tokens and user info
@@ -70,7 +82,7 @@ const AuthClient = window.AuthClient = {
             return { success: true, user: data.user };
         } catch (error) {
             console.error('Login error:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: normalizeAuthErrorMessage(error.message) };
         }
     },
 

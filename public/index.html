@@ -21,11 +21,16 @@
         <div class="nav-links">
             <a href="#">Home</a>
             <a href="#events">Discover Events</a>
-            <span id="userDisplay" style="margin-left: auto; display: flex; align-items: center; gap: 15px; color: #666;">
-                <span id="userName" style="color: #f8fafc;"></span>
-                <button id="logoutBtn" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">Logout</button>
-            </span>
-            <a id="loginLink" href="/login.html" style="margin-left: auto; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 500; display: none;">Sign In</a>
+            <div id="userMenuContainer" class="user-menu-container" style="display: none;">
+                <button id="userMenuBtn" class="user-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false">
+                    <span id="userName">Account</span>
+                    <span class="caret">▾</span>
+                </button>
+                <div id="userDropdown" class="user-dropdown" role="menu">
+                    <button id="logoutBtn" class="user-dropdown-item" type="button" role="menuitem">Logout</button>
+                </div>
+            </div>
+            <a id="loginLink" href="/login.html" class="login-btn" style="display: none;">Sign In</a>
         </div>
     </nav>
 
@@ -165,7 +170,7 @@
         })();
     </script>
 
-    <script src="/scripts/auth.js"></script>
+    <script src="/scripts/auth.js?v=3"></script>
     <script src="/scripts/app.js"></script>
 </body>
 

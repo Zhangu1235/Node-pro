@@ -8,7 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const userDisplay = document.getElementById('userDisplay');
+            const userMenuContainer = document.getElementById('userMenuContainer');
+            const userMenuBtn = document.getElementById('userMenuBtn');
+            const userDropdown = document.getElementById('userDropdown');
             const userName = document.getElementById('userName');
             const logoutBtn = document.getElementById('logoutBtn');
             const loginLink = document.getElementById('loginLink');
@@ -18,16 +20,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (!currentUser || !AuthClient.isAuthenticated()) {
                     // User not logged in, hide user display and show login link
-                    if (userDisplay) userDisplay.style.display = 'none';
+                    if (userMenuContainer) userMenuContainer.style.display = 'none';
                     if (loginLink) loginLink.style.display = 'inline-block';
                 } else {
                     // User logged in, show user info and hide login link
                     if (loginLink) loginLink.style.display = 'none';
-                    if (userDisplay) {
-                        userDisplay.style.display = 'flex';
+                    if (userMenuContainer) {
+                        userMenuContainer.style.display = 'block';
                         if (userName) {
-                            userName.textContent = `Welcome, ${currentUser.username || currentUser.email}!`;
+                            userName.textContent = currentUser.username || currentUser.email || 'Account';
                         }
+                    }
+
+                    if (userMenuBtn && userDropdown) {
+                        const closeDropdown = () => {
+                            userDropdown.classList.remove('open');
+                            userMenuBtn.setAttribute('aria-expanded', 'false');
+                        };
+
+                        userMenuBtn.addEventListener('click', (eventObj) => {
+                            eventObj.preventDefault();
+                            eventObj.stopPropagation();
+                            const isOpen = userDropdown.classList.toggle('open');
+                            userMenuBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                        });
+
+                        document.addEventListener('click', (eventObj) => {
+                            if (!userMenuContainer.contains(eventObj.target)) {
+                                closeDropdown();
+                            }
+                        });
+
+                        document.addEventListener('keydown', (eventObj) => {
+                            if (eventObj.key === 'Escape') {
+                                closeDropdown();
+                            }
+                        });
                     }
 
                     // Handle logout

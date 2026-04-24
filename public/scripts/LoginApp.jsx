@@ -1,10 +1,15 @@
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 const LoginApp = () => {
     const [isLoginMode, setIsLoginMode] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
+    const [captchaSiteKey, setCaptchaSiteKey] = useState('');
+    const [captchaToken, setCaptchaToken] = useState('');
+    const [isTurnstileReady, setIsTurnstileReady] = useState(!!window.turnstile);
+    const captchaContainerRef = useRef(null);
+    const turnstileWidgetIdRef = useRef(null);
 
     const [formData, setFormData] = useState({
         email: '',
@@ -20,6 +25,66 @@ const LoginApp = () => {
         }
     }, []);
 
+    useEffect(() => {
+        const loadAuthConfig = async () => {
+            try {
+                const response = await fetch('/api/auth/config');
+                const data = await response.json();
+                const siteKey = data?.captcha?.siteKey || '';
+                setCaptchaSiteKey(siteKey);
+            } catch (error) {
+                console.warn('Failed to load auth config:', error);
+            }
+        };
+
+        loadAuthConfig();
+    }, []);
+
+    useEffect(() => {
+        if (window.turnstile) {
+            setIsTurnstileReady(true);
+            return;
+        }
+
+        const poll = setInterval(() => {
+            if (window.turnstile) {
+                setIsTurnstileReady(true);
+                clearInterval(poll);
+            }
+        }, 250);
+
+        return () => clearInterval(poll);
+    }, []);
+
+    useEffect(() => {
+        if (!captchaSiteKey || !captchaContainerRef.current || !window.turnstile || !isTurnstileReady) return;
+
+        if (turnstileWidgetIdRef.current) {
+            try {
+                window.turnstile.remove(turnstileWidgetIdRef.current);
+            } catch (error) {
+                console.warn('Failed to remove Turnstile widget:', error);
+            }
+            turnstileWidgetIdRef.current = null;
+        }
+
+        const widgetId = window.turnstile.render(captchaContainerRef.current, {
+            sitekey: captchaSiteKey,
+            theme: 'dark',
+            callback: (token) => {
+                setCaptchaToken(token);
+            },
+            'expired-callback': () => {
+                setCaptchaToken('');
+            },
+            'error-callback': () => {
+                setCaptchaToken('');
+            }
+        });
+
+        turnstileWidgetIdRef.current = widgetId;
+    }, [captchaSiteKey, isLoginMode, isTurnstileReady]);
+
     const handleInputChange = (e) => {
         setFormData({
             ...formData,
@@ -32,20 +97,14 @@ const LoginApp = () => {
         setIsLoginMode(!isLoginMode);
         setErrorMsg('');
         setSuccessMsg('');
+        setCaptchaToken('');
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrorMsg('');
         setSuccessMsg('');
-
-        // reCAPTCHA check
-        const captchaResponse = window.grecaptcha && window.grecaptcha.getResponse();
-        if (!captchaResponse) {
-            setErrorMsg('Please complete the captcha.');
-            return;
-        }
-
+        
         if (!window.AuthClient) {
             setErrorMsg('Authentication client not found.');
             return;
@@ -60,6 +119,11 @@ const LoginApp = () => {
 
         if (!email.includes('@')) {
             setErrorMsg('Invalid email format');
+            return;
+        }
+
+        if (captchaSiteKey && !captchaToken) {
+            setErrorMsg('Please complete captcha verification');
             return;
         }
 
@@ -87,69 +151,86 @@ const LoginApp = () => {
         try {
             let result;
             if (isLoginMode) {
-                result = await window.AuthClient.login(email, password);
+                result = await window.AuthClient.login(email, password, captchaToken);
             } else {
-                result = await window.AuthClient.signup(email, password, username);
+                result = await window.AuthClient.signup(email, password, username, captchaToken);
             }
 
             if (result.success) {
-                return (
-                    <div className="login-container">
-                        <form className="login-form" onSubmit={handleSubmit}>
-                            <h2>{isLoginMode ? 'Login' : 'Register'}</h2>
-                            {errorMsg && <div className="error-msg">{errorMsg}</div>}
-                            {successMsg && <div className="success-msg">{successMsg}</div>}
-                            <input
-                                type="email"
-                                name="email"
-                                placeholder="Email"
-                                value={formData.email}
-                                onChange={handleInputChange}
-                                autoComplete="email"
-                            />
-                            <input
-                                type="password"
-                                name="password"
-                                placeholder="Password"
-                                value={formData.password}
-                                onChange={handleInputChange}
-                                autoComplete="current-password"
-                            />
-                            {!isLoginMode && (
-                                <>
-                                    <input
-                                        type="password"
-                                        name="confirmPassword"
-                                        placeholder="Confirm Password"
-                                        value={formData.confirmPassword}
-                                        onChange={handleInputChange}
-                                        autoComplete="new-password"
-                                    />
-                                    <input
-                                        type="text"
-                                        name="username"
-                                        placeholder="Username"
-                                        value={formData.username}
-                                        onChange={handleInputChange}
-                                        autoComplete="username"
-                                    />
-                                </>
-                            )}
-                            {/* reCAPTCHA widget */}
-                            <div style={{ margin: '16px 0' }}>
-                                <div className="g-recaptcha" data-sitekey="YOUR_RECAPTCHA_SITE_KEY"></div>
-                            </div>
-                            <button type="submit" disabled={isLoading}>
-                                {isLoginMode ? 'Login' : 'Register'}
-                            </button>
-                            <button className="toggle-btn" onClick={toggleMode}>
-                                {isLoginMode ? 'Need an account? Register' : 'Already have an account? Login'}
-                            </button>
-                        </form>
-                    </div>
+                if (!isLoginMode) {
+                    const loginAfterSignup = await window.AuthClient.login(email, password, captchaToken);
+                    if (loginAfterSignup.success) {
+                        setSuccessMsg(`Welcome, ${username}! Redirecting...`);
+                        setTimeout(() => {
+                            window.location.href = '/index.html';
+                        }, 800);
+                    } else {
+                        setErrorMsg(loginAfterSignup.error || 'Account created, but auto-login failed. Please sign in.');
+                        setIsLoginMode(true);
+                        setIsLoading(false);
+                    }
+                } else {
+                    window.location.href = '/index.html';
+                }
+            } else {
+                setErrorMsg(result.error || (isLoginMode ? 'Login failed' : 'Signup failed'));
+                if (captchaSiteKey && window.turnstile && turnstileWidgetIdRef.current) {
+                    window.turnstile.reset(turnstileWidgetIdRef.current);
+                    setCaptchaToken('');
+                }
+                setIsLoading(false);
+            }
+        } catch (err) {
+            setErrorMsg('An unexpected error occurred. Please try again.');
+            if (captchaSiteKey && window.turnstile && turnstileWidgetIdRef.current) {
+                window.turnstile.reset(turnstileWidgetIdRef.current);
+                setCaptchaToken('');
+            }
+            setIsLoading(false);
+        }
+    };
 
-                );
-    // ...existing code...
+    const containerStyle = {
+        background: 'linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%)',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+        fontFamily: "'Inter', sans-serif"
+    };
+
+    const cardStyle = {
+        width: '100%',
+        maxWidth: '420px',
+        background: 'rgba(15, 23, 42, 0.7)',
+        border: '1px solid rgba(157, 78, 221, 0.3)',
+        borderRadius: '20px',
+        padding: '2.5rem 2rem',
+        backdropFilter: 'blur(20px)',
+        boxShadow: '0 25px 50px rgba(0, 0, 0, 0.5), 0 0 20px rgba(157, 78, 221, 0.2)',
+        transition: 'all 0.4s ease'
+    };
+
+    const headerSpanStyle = {
+        background: 'linear-gradient(135deg, #9d4edd 0%, #00f5d4 100%)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text'
+    };
+
+    const inputStyle = {
+        width: '100%',
+        padding: '0.875rem 1rem',
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '10px',
+        color: '#f8fafc',
+        fontSize: '1rem',
+        fontFamily: 'inherit',
+        marginBottom: '1.5rem',
+        boxSizing: 'border-box'
+    };
 
     const labelStyle = {
         display: 'block',
@@ -164,144 +245,75 @@ const LoginApp = () => {
     const btnStyle = {
         width: '100%',
         padding: '1rem',
-                                const captchaRef = React.useRef(null);
-                                const [captchaReady, setCaptchaReady] = useState(false);
-                                const [captchaId, setCaptchaId] = useState(null);
+        background: 'linear-gradient(135deg, #9d4edd 0%, #00f5d4 100%)',
+        color: '#0f0f1e',
+        border: 'none',
+        borderRadius: '10px',
+        fontSize: '1.1rem',
+        fontWeight: '700',
+        cursor: isLoading ? 'not-allowed' : 'pointer',
+        opacity: isLoading ? 0.7 : 1,
+        transition: 'all 0.3s ease',
+        boxShadow: '0 10px 25px rgba(0, 245, 212, 0.3)'
+    };
 
-                                // Render reCAPTCHA widget after mount
-                                useEffect(() => {
-                                    const renderCaptcha = () => {
-                                        if (window.grecaptcha && captchaRef.current && !captchaId) {
-                                            const id = window.grecaptcha.render(captchaRef.current, {
-                                                sitekey: 'YOUR_RECAPTCHA_SITE_KEY',
-                                            });
-                                            setCaptchaId(id);
-                                            setCaptchaReady(true);
-                                        }
-                                    };
-                                    if (window.grecaptcha) {
-                                        renderCaptcha();
-                                    } else {
-                                        window.__onRecaptchaLoaded = renderCaptcha;
-                                        const oldOnLoad = window.onload;
-                                        window.onload = function() {
-                                            if (oldOnLoad) oldOnLoad();
-                                            if (window.__onRecaptchaLoaded) window.__onRecaptchaLoaded();
-                                        };
-                                    }
-                                }, [captchaId]);
+    return (
+        <div style={containerStyle}>
+            <div style={cardStyle}>
+                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '0.5rem', color: '#f8fafc', fontFamily: "'Outfit', sans-serif" }}>
+                        Startup<span style={headerSpanStyle}>Events</span>
+                    </h1>
+                    <p style={{ color: '#94a3b8', fontSize: '0.95rem' }}>
+                        {isLoginMode ? 'Sign in to your account' : 'Create a new account'}
+                    </p>
+                </div>
 
-                                const resetCaptcha = () => {
-                                    if (window.grecaptcha && captchaId !== null) {
-                                        window.grecaptcha.reset(captchaId);
-                                    }
-                                };
+                {errorMsg && (
+                    <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', color: '#fca5a5', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+                        {errorMsg}
+                    </div>
+                )}
 
-                                const handleSubmit = async (e) => {
-                                    e.preventDefault();
-                                    setErrorMsg('');
-                                    setSuccessMsg('');
+                {successMsg && (
+                    <div style={{ padding: '1rem', background: 'rgba(74, 222, 128, 0.1)', border: '1px solid rgba(74, 222, 128, 0.3)', borderRadius: '8px', color: '#86efac', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+                        {successMsg}
+                    </div>
+                )}
 
-                                    if (!captchaReady) {
-                                        setErrorMsg('Captcha not loaded. Please wait.');
-                                        return;
-                                    }
-                                    const captchaResponse = window.grecaptcha.getResponse(captchaId);
-                                    if (!captchaResponse) {
-                                        setErrorMsg('Please complete the captcha.');
-                                        return;
-                                    }
+                <form onSubmit={handleSubmit}>
+                    <div style={{ display: isLoginMode ? 'none' : 'block' }}>
+                        <label style={labelStyle}>Username</label>
+                        <input 
+                            type="text" 
+                            name="username"
+                            value={formData.username}
+                            onChange={handleInputChange}
+                            style={inputStyle} 
+                            placeholder="Choose a username" 
+                        />
+                    </div>
 
-                                    // Verify captcha with backend
-                                    let captchaValid = false;
-                                    try {
-                                        const verifyRes = await fetch('/api/verify-captcha', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ token: captchaResponse })
-                                        });
-                                        const verifyData = await verifyRes.json();
-                                        captchaValid = verifyData.success;
-                                    } catch (err) {
-                                        setErrorMsg('Captcha verification failed.');
-                                        resetCaptcha();
-                                        return;
-                                    }
-                                    if (!captchaValid) {
-                                        setErrorMsg('Captcha verification failed.');
-                                        resetCaptcha();
-                                        return;
-                                    }
+                    <div>
+                        <label style={labelStyle}>Email</label>
+                        <input 
+                            type="email" 
+                            name="email"
+                            value={formData.email}
+                            onChange={handleInputChange}
+                            style={inputStyle} 
+                            placeholder="your@email.com" 
+                        />
+                    </div>
 
-                                    if (!window.AuthClient) {
-                                        setErrorMsg('Authentication client not found.');
-                                        resetCaptcha();
-                                        return;
-                                    }
-
-                                    const { email, password, confirmPassword, username } = formData;
-
-                                    if (!email || !password) {
-                                        setErrorMsg('Email and password are required');
-                                        resetCaptcha();
-                                        return;
-                                    }
-
-                                    if (!email.includes('@')) {
-                                        setErrorMsg('Invalid email format');
-                                        resetCaptcha();
-                                        return;
-                                    }
-
-                                    if (!isLoginMode) {
-                                        if (!confirmPassword || !username) {
-                                            setErrorMsg('All fields are required');
-                                            resetCaptcha();
-                                            return;
-                                        }
-                                        if (password.length < 6) {
-                                            setErrorMsg('Password must be at least 6 characters');
-                                            resetCaptcha();
-                                            return;
-                                        }
-                                        if (password !== confirmPassword) {
-                                            setErrorMsg('Passwords do not match');
-                                            resetCaptcha();
-                                            return;
-                                        }
-                                        if (username.length < 2) {
-                                            setErrorMsg('Username must be at least 2 characters');
-                                            resetCaptcha();
-                                            return;
-                                        }
-                                    }
-
-                                    setIsLoading(true);
-
-                                    try {
-                                        let result;
-                                        if (isLoginMode) {
-                                            result = await window.AuthClient.login(email, password);
-                                        } else {
-                                            result = await window.AuthClient.signup(email, password, username);
-                                        }
-
-                                        if (result.success) {
-                                            setSuccessMsg('Success! Redirecting...');
-                                            setTimeout(() => {
-                                                window.location.href = '/index.html';
-                                            }, 1000);
-                                        } else {
-                                            setErrorMsg(result.error || 'Authentication failed');
-                                            resetCaptcha();
-                                        }
-                                    } catch (err) {
-                                        setErrorMsg('An error occurred.');
-                                        resetCaptcha();
-                                    } finally {
-                                        setIsLoading(false);
-                                    }
-                                };
+                    <div>
+                        <label style={labelStyle}>Password</label>
+                        <input 
+                            type="password" 
+                            name="password"
+                            value={formData.password}
+                            onChange={handleInputChange}
+                            style={inputStyle} 
                             placeholder={isLoginMode ? "Enter your password" : "At least 6 characters"} 
                         />
                     </div>
@@ -317,6 +329,12 @@ const LoginApp = () => {
                             placeholder="Confirm your password" 
                         />
                     </div>
+
+                    {captchaSiteKey && (
+                        <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+                            <div ref={captchaContainerRef}></div>
+                        </div>
+                    )}
 
                     <button type="submit" style={btnStyle} disabled={isLoading} 
                         onMouseOver={(e) => { if(!isLoading) e.target.style.transform = 'translateY(-2px)' }} 
