@@ -46,6 +46,11 @@ const strictLimiter = new RateLimiter(60 * 1000, 5); // 5 requests per minute fo
 // Apply rate limiting to API routes
 app.use('/api/', apiLimiter.middleware());
 
+// Root route - serve index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Health check endpoint (no auth required)
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -614,6 +619,11 @@ setInterval(() => {
     apiLimiter.cleanup();
     strictLimiter.cleanup();
 }, 60 * 1000); // Run every minute
+
+// Catch-all 404 handler - must be last
+app.use((req, res) => {
+    res.status(404).send('404 page not found');
+});
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
