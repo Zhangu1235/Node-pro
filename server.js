@@ -4,6 +4,7 @@ const cors = require('cors');
 const { ApifyClient } = require('apify-client');
 const path = require('path');
 const { loadSnapshot, saveEvents, getStorageInfo } = require('./lib/event-store');
+const { registerUser, loginUser, authMiddleware, verifyToken, refreshToken } = require('./lib/auth');
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -23,6 +24,79 @@ const apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '1mb' }));
+
+// Auth endpoints (public - no middleware required)
+app.post('/api/auth/register', async (req, res) => {
+    const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+        return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const result = await registerUser(email, password, username);
+    
+    if (!result.success) {
+        return res.status(400).json({ error: result.error });
+    }
+
+    return res.status(201).json(result);
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const result = await loginUser(email, password);
+    
+    if (!result.success) {
+        return res.status(401).json({ error: result.error });
+    }
+
+    return res.json(result);
+});
+
+app.get('/api/auth/verify', authMiddleware, (req, res) => {
+    res.json({ 
+        message: 'Token is valid',
+        user: {
+            id: req.user.id,
+            email: req.user.email
+        }
+    });
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+        return res.status(400).json({ error: 'Refresh token is required' });
+    }
+
+    const result = await refreshToken(refresh_token);
+    
+    if (!result.success) {
+        return res.status(401).json({ error: result.error });
+    }
+
+    return res.json(result);
+});
+
+app.post('/api/auth/logout', authMiddleware, async (req, res) => {
+    // With Supabase, logout is mainly client-side (remove token)
+    // But we can invalidate sessions on the server if needed
+    return res.json({ message: 'Logged out successfully' });
+});
+
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 
 // Listen for connections (WebSockets)
 io.on('connection', (socket) => {
@@ -104,7 +178,7 @@ function summarizeEventForAssistant(event) {
     };
 }
 
-app.post('/api/apify/fetch', async (req, res) => {
+app.post('/api/apify/fetch', authMiddleware, async (req, res) => {
     if (!APIFY_API_TOKEN) {
         return res.status(400).json({ error: 'Missing APIFY_API_TOKEN in .env' });
     }
@@ -205,7 +279,7 @@ app.post('/api/webhooks/apify', express.text({type: '*/*'}), async (req, res) =>
     res.status(200).send("Apify Webhook Processed!");
 });
 
-app.get('/api/events', async (req, res) => {
+app.get('/api/events', authMiddleware, async (req, res) => {
     // Serve our magically cached Apify events!
     // If empty, frontend shows "No events", but once the webhook hits, it works!
     return res.json({
@@ -214,7 +288,7 @@ app.get('/api/events', async (req, res) => {
     });
 });
 
-app.get('/api/events/download', async (req, res) => {
+app.get('/api/events/download', authMiddleware, async (req, res) => {
     if (!cacheMeta.filePath) {
         return res.status(404).json({ error: 'No local JSON cache available yet.' });
     }
@@ -222,7 +296,7 @@ app.get('/api/events/download', async (req, res) => {
     return res.download(cacheMeta.filePath, 'events-cache.json');
 });
 
-app.post('/api/assistant', async (req, res) => {
+app.post('/api/assistant', authMiddleware, async (req, res) => {
     if (!GEMINI_API_KEY) {
         return res.status(503).json({ error: 'Missing GEMINI_API_KEY in .env' });
     }

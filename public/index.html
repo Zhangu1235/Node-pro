@@ -11,6 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="/styles/design-system.css">
     <link rel="stylesheet" href="/styles/main.css">
 </head>
 
@@ -20,6 +21,10 @@
         <div class="nav-links">
             <a href="#">Home</a>
             <a href="#events">Discover Events</a>
+            <span id="userDisplay" style="margin-left: auto; display: flex; align-items: center; gap: 15px; color: #666;">
+                <span id="userName"></span>
+                <button id="logoutBtn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">Logout</button>
+            </span>
         </div>
     </nav>
 
@@ -149,6 +154,74 @@
 
     <!-- Keyboard Shortcuts Toggle -->
     <button id="shortcuts-btn" class="shortcuts-btn" title="Show keyboard shortcuts" aria-label="Show keyboard shortcuts">?</button>
+
+    <script>
+        // Auth check and UI setup
+        (function() {
+            const authToken = localStorage.getItem('authToken');
+            const userStorage = localStorage.getItem('user');
+            
+            // Redirect to login if not authenticated
+            if (!authToken) {
+                window.location.href = '/login';
+                return;
+            }
+
+            // Display user info
+            if (userStorage) {
+                try {
+                    const user = JSON.parse(userStorage);
+                    const userName = document.getElementById('userName');
+                    if (userName) {
+                        userName.textContent = `Welcome, ${user.username || user.email}`;
+                    }
+                } catch (e) {
+                    console.error('Error parsing user data');
+                }
+            }
+
+            // Setup logout button
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async () => {
+                    try {
+                        await fetch('/api/auth/logout', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Logout error:', e);
+                    }
+                    
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('refreshToken');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                });
+            }
+
+            // Add auth token to all API requests
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const [resource, config] = args;
+                const token = localStorage.getItem('authToken');
+                
+                if (token && (resource.startsWith('/api/') || resource.includes('localhost'))) {
+                    if (!config) {
+                        args[1] = {};
+                    }
+                    if (!args[1].headers) {
+                        args[1].headers = {};
+                    }
+                    args[1].headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                return originalFetch.apply(this, args);
+            };
+        })();
+    </script>
 
     <script src="/scripts/app.js"></script>
 </body>

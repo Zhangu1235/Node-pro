@@ -1,203 +1,31 @@
+/* =====================================================
+   MAIN.CSS - App-specific styles (extends design-system.css)
+   ===================================================== */
+
+/* Variable aliases for backward compatibility */
 :root {
-    --bg-dark: #08111f;
-    --bg-darker: #020814;
-    --bg-card: rgba(11, 21, 37, 0.72);
-    --bg-card-hover: rgba(17, 30, 50, 0.92);
-    --text-primary: #f8fafc;
-    --text-secondary: #a8bdd2;
-    --text-tertiary: #6c8298;
-    --accent-primary: #ff7a18;
-    --accent-secondary: #19b6ff;
-    --accent-tertiary: #ff4d8d;
-    --border-color: rgba(255, 255, 255, 0.08);
-    --border-color-hover: rgba(25, 182, 255, 0.3);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
-    --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.25);
-    --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.35);
-    --shadow-glow: 0 0 30px rgba(25, 182, 255, 0.15);
+    /* Map old variable names to new design-system variables */
+    --bg-dark: var(--color-bg-dark);
+    --bg-darker: var(--color-bg-darker);
+    --bg-card: var(--color-bg-card);
+    --bg-card-hover: var(--color-bg-card-hover);
+    --text-primary: var(--color-text-primary);
+    --text-secondary: var(--color-text-secondary);
+    --text-tertiary: var(--color-text-tertiary);
+    --accent-primary: var(--color-accent-primary);
+    --accent-secondary: var(--color-accent-secondary);
+    --accent-tertiary: var(--color-accent-tertiary);
+    --border-color: var(--color-border);
+    --border-color-hover: var(--color-border-hover);
 }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+/* Remove duplicate color definitions - inherited from design-system.css */
 
-body {
-    font-family: 'Inter', sans-serif;
-    background:
-        radial-gradient(circle at top left, rgba(255, 122, 24, 0.18), transparent 32%),
-        radial-gradient(circle at 85% 15%, rgba(25, 182, 255, 0.18), transparent 28%),
-        linear-gradient(180deg, #06101d 0%, #040913 100%);
-    color: var(--text-primary);
-    line-height: 1.6;
-    overflow-x: hidden;
-    position: relative;
-}
+/* App-specific components and overrides below */
 
-/* Background Gradients */
-body::before, body::after {
-    content: '';
-    position: absolute;
-    width: 800px;
-    height: 800px;
-    border-radius: 50%;
-    filter: blur(120px);
-    z-index: -1;
-    opacity: 0.12;
-}
-
-@keyframes orbFloat1 {
-    0% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(30px, -50px) scale(1.1); }
-    66% { transform: translate(-20px, 20px) scale(0.9); }
-    100% { transform: translate(0, 0) scale(1); }
-}
-
-@keyframes orbFloat2 {
-    0% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(-30px, 50px) scale(1.1); }
-    66% { transform: translate(20px, -20px) scale(0.9); }
-    100% { transform: translate(0, 0) scale(1); }
-}
-
-body::before {
-    top: -100px;
-    left: -100px;
-    background: var(--accent-primary);
-    animation: orbFloat1 15s ease-in-out infinite;
-}
-
-body::after {
-    bottom: 20%;
-    right: -100px;
-    background: var(--accent-secondary);
-    animation: orbFloat2 18s ease-in-out infinite reverse;
-}
-
-.glass-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(6px);
-    opacity: 0.9;
-    pointer-events: none;
-}
-
-.orb-1 {
-    width: 180px;
-    height: 180px;
-    top: -30px;
-    right: 80px;
-    background: radial-gradient(circle, rgba(255, 122, 24, 0.4), rgba(255, 122, 24, 0.05) 70%);
-    animation: orbFloat1 14s ease-in-out infinite;
-}
-
-.orb-2 {
-    width: 240px;
-    height: 240px;
-    bottom: -40px;
-    right: -10px;
-    background: radial-gradient(circle, rgba(25, 182, 255, 0.32), rgba(25, 182, 255, 0.05) 72%);
-    animation: orbFloat2 18s ease-in-out infinite;
-}
-
-/* Typography */
-h1, h2, h3 {
-    font-family: 'Outfit', sans-serif;
-}
-
-.gradient-text {
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-/* Navbar */
-.navbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 5%;
-    background: rgba(10, 14, 26, 0.85);
-    backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border-color);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
-}
-
-.logo {
-    font-size: 1.5rem;
-    font-weight: 800;
-    font-family: 'Outfit', sans-serif;
-    letter-spacing: -0.5px;
-    background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: transform 0.3s ease;
-}
-
-.logo:hover {
-    transform: scale(1.05);
-}
-
-.logo span {
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.nav-links {
-    display: flex;
-    gap: 2.5rem;
-    align-items: center;
-}
-
-.nav-links a {
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    position: relative;
-}
-
-.nav-links a:after {
-    content: '';
-    position: absolute;
-    bottom: -5px;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
-    transition: width 0.3s ease;
-}
-
-.nav-links a:hover {
-    color: var(--text-primary);
-}
-
-.nav-links a:hover:after {
-    width: 100%;
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-    color: white !important;
-    padding: 0.7rem 1.8rem;
-    border-radius: 50px;
-    font-weight: 600;
-    transition: all 0.3s ease;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2);
+/* =====================================================
+   CUSTOM COMPONENTS
+   ===================================================== */
     font-size: 0.9rem;
 }
 
