@@ -3,45 +3,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const initAuth = () => {
         try {
             if (typeof AuthClient === 'undefined') {
-                console.warn('AuthClient not loaded yet');
+                console.warn('AuthClient not loaded yet, retrying in 100ms');
+                setTimeout(initAuth, 100);
                 return;
             }
 
             const userDisplay = document.getElementById('userDisplay');
             const userName = document.getElementById('userName');
             const logoutBtn = document.getElementById('logoutBtn');
-            const currentUser = AuthClient.getUser();
+            
+            try {
+                const currentUser = AuthClient.getUser();
 
-            if (!currentUser) {
-                // User not logged in, hide user display
-                if (userDisplay) userDisplay.style.display = 'none';
-            } else {
-                // User logged in, show user info
-                if (userDisplay) {
-                    userDisplay.style.display = 'flex';
-                    if (userName) {
-                        userName.textContent = `Welcome, ${currentUser.username || currentUser.email}!`;
+                if (!currentUser) {
+                    // User not logged in, hide user display
+                    if (userDisplay) userDisplay.style.display = 'none';
+                } else {
+                    // User logged in, show user info
+                    if (userDisplay) {
+                        userDisplay.style.display = 'flex';
+                        if (userName) {
+                            userName.textContent = `Welcome, ${currentUser.username || currentUser.email}!`;
+                        }
+                    }
+
+                    // Handle logout
+                    if (logoutBtn) {
+                        logoutBtn.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            const result = await AuthClient.logout();
+                            if (result.success) {
+                                window.location.href = '/login.html';
+                            }
+                        });
                     }
                 }
-
-                // Handle logout
-                if (logoutBtn) {
-                    logoutBtn.addEventListener('click', async (e) => {
-                        e.preventDefault();
-                        const result = await AuthClient.logout();
-                        if (result.success) {
-                            window.location.href = '/login.html';
-                        }
-                    });
-                }
+            } catch (error) {
+                console.error('Error accessing AuthClient:', error);
             }
         } catch (error) {
             console.error('Auth initialization error:', error);
         }
     };
 
-    // Initialize auth UI first
-    initAuth();
+    // Initialize auth UI first with a small delay to ensure scripts are loaded
+    setTimeout(initAuth, 50);
 
     const eventsGrid = document.getElementById('events-grid');
     const keywordInput = document.getElementById('keywordInput');

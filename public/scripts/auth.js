@@ -14,7 +14,7 @@ const AuthClient = {
      */
     async signup(email, password, username) {
         try {
-            const response = await fetch('/api/auth/signup', {
+            const response = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -227,15 +227,19 @@ const AuthClient = {
 
 // Auto-verify token on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    if (AuthClient.isAuthenticated()) {
-        const isValid = await AuthClient.verifyToken();
-        if (!isValid) {
-            console.warn('Token is invalid or expired');
-            AuthClient.clearAuth();
-            // Redirect to login if needed
-            if (window.location.pathname !== '/login.html' && window.location.pathname !== '/') {
-                window.location.href = '/login.html';
+    try {
+        if (AuthClient.isAuthenticated()) {
+            const isValid = await AuthClient.verifyToken();
+            if (!isValid) {
+                console.warn('Token is invalid or expired');
+                AuthClient.clearAuth();
+                // Redirect to login if needed
+                if (window.location.pathname !== '/login.html' && window.location.pathname !== '/') {
+                    window.location.href = '/login.html';
+                }
             }
         }
+    } catch (error) {
+        console.error('Auto-verify error:', error);
     }
 });
