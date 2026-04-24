@@ -158,68 +158,9 @@
     <script>
         // Auth check and UI setup
         (function() {
-            const authToken = localStorage.getItem('authToken');
-            const userStorage = localStorage.getItem('user');
-            
-            // Redirect to login if not authenticated
-            if (!authToken) {
-                window.location.href = '/login';
-                return;
-            }
-
-            // Display user info
-            if (userStorage) {
-                try {
-                    const user = JSON.parse(userStorage);
-                    const userName = document.getElementById('userName');
-                    if (userName) {
-                        userName.textContent = `Welcome, ${user.username || user.email}`;
-                    }
-                } catch (e) {
-                    console.error('Error parsing user data');
-                }
-            }
-
-            // Setup logout button
-            const logoutBtn = document.getElementById('logoutBtn');
-            if (logoutBtn) {
-                logoutBtn.addEventListener('click', async () => {
-                    try {
-                        await fetch('/api/auth/logout', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${authToken}`
-                            }
-                        });
-                    } catch (e) {
-                        console.error('Logout error:', e);
-                    }
-                    
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('refreshToken');
-                    localStorage.removeItem('user');
-                    window.location.href = '/login';
-                });
-            }
-
-            // Add auth token to all API requests
-            const originalFetch = window.fetch;
-            window.fetch = function(...args) {
-                const [resource, config] = args;
-                const token = localStorage.getItem('authToken');
-                
-                if (token && (resource.startsWith('/api/') || resource.includes('localhost'))) {
-                    if (!config) {
-                        args[1] = {};
-                    }
-                    if (!args[1].headers) {
-                        args[1].headers = {};
-                    }
-                    args[1].headers['Authorization'] = `Bearer ${token}`;
-                }
-                
-                return originalFetch.apply(this, args);
-            };
+            // Note: Auth token handling is now done by auth.js and app.js
+            // This inline script is kept for backward compatibility
+            // The main auth logic runs in DOMContentLoaded event
         })();
     </script>
 
