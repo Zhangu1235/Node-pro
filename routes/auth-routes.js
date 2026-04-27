@@ -221,7 +221,7 @@ router.get('/me', async (req, res) => {
 /**
  * Middleware to verify authentication
  */
-export function verifyAuth(req, res, next) {
+function verifyAuth(req, res, next) {
   const token = extractToken(req);
   if (!token) {
     return res.status(401).json({
@@ -241,3 +241,4 @@ export function verifyAuth(req, res, next) {
 }
 
 module.exports = router;
+module.exports.verifyAuth = verifyAuth;

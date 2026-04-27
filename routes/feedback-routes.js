@@ -1,6 +1,7 @@
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
-const { verifyAuth } = require('./auth-routes');
+const authRoutes = require('./auth-routes');
+const verifyAuth = authRoutes.verifyAuth;
 
 const router = express.Router();
 
