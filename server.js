@@ -17,6 +17,8 @@ const {
 } = require('./lib/api-utils');
 const RateLimiter = require('./lib/rate-limiter');
 const { requestLoggingMiddleware, logError, logSuccess } = require('./lib/logger');
+const authRoutes = require('./routes/auth-routes');
+const feedbackRoutes = require('./routes/feedback-routes');
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -47,6 +49,10 @@ const strictLimiter = new RateLimiter(60 * 1000, 5); // 5 requests per minute fo
 
 // Apply rate limiting to API routes
 app.use('/api/', apiLimiter.middleware());
+
+// Mount new auth and feedback routes
+app.use('/api/auth', authRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Root route - serve index.html
 app.get('/', (req, res) => {

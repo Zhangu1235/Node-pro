@@ -1,6 +1,6 @@
-import express from 'express';
-import { createClient } from '@supabase/supabase-js';
-import {
+const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
+const {
   hashPassword,
   comparePassword,
   generateToken,
@@ -8,7 +8,7 @@ import {
   extractToken,
   isValidEmail,
   validatePassword
-} from '../lib/auth-utils.js';
+} = require('../lib/auth-utils');
 
 const router = express.Router();
 
@@ -240,4 +240,4 @@ export function verifyAuth(req, res, next) {
   next();
 }
 
-export default router;
+module.exports = router;

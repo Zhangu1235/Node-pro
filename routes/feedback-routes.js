@@ -1,6 +1,6 @@
-import express from 'express';
-import { createClient } from '@supabase/supabase-js';
-import { verifyAuth } from './auth-routes.js';
+const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
+const { verifyAuth } = require('./auth-routes');
 
 const router = express.Router();
 
@@ -244,4 +244,4 @@ router.delete('/:id', verifyAuth, async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

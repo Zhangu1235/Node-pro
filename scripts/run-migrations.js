@@ -1,9 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -51,4 +48,7 @@ async function runMigrations() {
   }
 }
 
-runMigrations();
+runMigrations().catch(error => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});
