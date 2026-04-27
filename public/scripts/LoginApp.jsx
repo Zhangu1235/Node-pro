@@ -158,16 +158,21 @@ const LoginApp = () => {
 
             if (result.success) {
                 if (!isLoginMode) {
-                    const loginAfterSignup = await window.AuthClient.login(email, password, captchaToken);
-                    if (loginAfterSignup.success) {
+                    if (result.hasSession) {
+                        // Session already came back with registration — skip separate login
                         setSuccessMsg(`Welcome, ${username}! Redirecting...`);
-                        setTimeout(() => {
-                            window.location.href = '/index.html';
-                        }, 800);
+                        setTimeout(() => { window.location.href = '/index.html'; }, 800);
                     } else {
-                        setErrorMsg(loginAfterSignup.error || 'Account created, but auto-login failed. Please sign in.');
-                        setIsLoginMode(true);
-                        setIsLoading(false);
+                        // Try a separate login as fallback
+                        const loginAfterSignup = await window.AuthClient.login(email, password, captchaToken);
+                        if (loginAfterSignup.success) {
+                            setSuccessMsg(`Welcome, ${username}! Redirecting...`);
+                            setTimeout(() => { window.location.href = '/index.html'; }, 800);
+                        } else {
+                            setSuccessMsg('Account created! Check your email to verify, then sign in.');
+                            setIsLoginMode(true);
+                            setIsLoading(false);
+                        }
                     }
                 } else {
                     window.location.href = '/index.html';
@@ -307,7 +312,16 @@ const LoginApp = () => {
                     </div>
 
                     <div>
-                        <label style={labelStyle}>Password</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                            <label style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
+                            {isLoginMode && (
+                                <a href="/forgot-password" style={{ color: '#00f5d4', fontSize: '0.8rem', fontWeight: '500', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+                                   onMouseOver={e => e.target.style.opacity = 1}
+                                   onMouseOut={e => e.target.style.opacity = 0.85}>
+                                    Forgot password?
+                                </a>
+                            )}
+                        </div>
                         <input 
                             type="password" 
                             name="password"

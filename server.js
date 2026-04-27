@@ -17,6 +17,8 @@ const {
 } = require('./lib/api-utils');
 const RateLimiter = require('./lib/rate-limiter');
 const { requestLoggingMiddleware, logError, logSuccess } = require('./lib/logger');
+const authRoutes = require('./routes/auth-routes');
+const feedbackRoutes = require('./routes/feedback-routes');
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -33,6 +35,8 @@ const APIFY_ACTOR_ID = process.env.APIFY_ACTOR_ID || '9dardaZ3akeIhRfs3';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '';
+const SUPABASE_URL_PUBLIC = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const apifyClient = new ApifyClient({ token: APIFY_API_TOKEN });
 
 // Middleware setup
@@ -47,6 +51,10 @@ const strictLimiter = new RateLimiter(60 * 1000, 5); // 5 requests per minute fo
 
 // Apply rate limiting to API routes
 app.use('/api/', apiLimiter.middleware());
+
+// Mount new auth and feedback routes
+app.use('/api/auth', authRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Root route - serve index.html
 app.get('/', (req, res) => {
@@ -73,6 +81,10 @@ app.get('/api/auth/config', (req, res) => {
             provider: TURNSTILE_SITE_KEY ? 'turnstile' : null,
             enabled: !!TURNSTILE_SITE_KEY,
             siteKey: TURNSTILE_SITE_KEY || null
+        },
+        supabase: {
+            url: SUPABASE_URL_PUBLIC || null,
+            anonKey: SUPABASE_ANON_KEY || null
         }
     });
 });
@@ -89,6 +101,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const result = await registerUser(email, password, username, captchaToken);
+    console.log('[register]', email, '→', result.success ? 'OK' + (result.session ? ' (session included)' : ' (no session)') : result.error);
     
     if (!result.success) {
         return res.status(400).json({ error: result.error });
@@ -105,6 +118,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const result = await loginUser(email, password, captchaToken);
+    console.log('[login]', email, '→', result.success ? 'OK' : result.error);
     
     if (!result.success) {
         return res.status(401).json({ error: result.error });

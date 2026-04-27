@@ -44,10 +44,16 @@ const AuthClient = window.AuthClient = {
                 throw new Error(normalizeAuthErrorMessage(data.error || 'Signup failed'));
             }
 
-            // Store user info (not tokens for security)
+            // Store user info
             this.setUser(data.user);
 
-            return { success: true, user: data.user };
+            // If the server returned a session (post-signup sign-in succeeded), store tokens now.
+            // This means the user is already logged in — no separate login call needed.
+            if (data.session) {
+                this.setTokens(data.session.access_token, data.session.refresh_token);
+            }
+
+            return { success: true, user: data.user, hasSession: !!data.session };
         } catch (error) {
             console.error('Signup error:', error);
             return { success: false, error: normalizeAuthErrorMessage(error.message) };
