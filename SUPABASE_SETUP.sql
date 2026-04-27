@@ -40,3 +40,43 @@ WITH CHECK (auth.role() = 'service_role');
 
 GRANT ALL ON public.user_profiles TO authenticated;
 GRANT ALL ON public.user_profiles TO service_role;
+
+-- Create feedback table for storing user feedback
+CREATE TABLE IF NOT EXISTS public.feedback (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+    category VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for feedback performance
+CREATE INDEX IF NOT EXISTS feedback_user_id_idx ON public.feedback(user_id);
+CREATE INDEX IF NOT EXISTS feedback_created_at_idx ON public.feedback(created_at);
+CREATE INDEX IF NOT EXISTS feedback_category_idx ON public.feedback(category);
+
+-- Enable Row Level Security for feedback
+ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
+
+-- Feedback RLS Policies
+CREATE POLICY "Users can view their own feedback" 
+ON public.feedback 
+FOR SELECT 
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create feedback" 
+ON public.feedback 
+FOR INSERT 
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage all feedback" 
+ON public.feedback 
+USING (auth.role() = 'service_role')
+WITH CHECK (auth.role() = 'service_role');
+
+GRANT ALL ON public.feedback TO authenticated;
+GRANT ALL ON public.feedback TO service_role;

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/design-system.css">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        .feedback-container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .feedback-header {
+            background-color: #007bff;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .feedback-header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .feedback-header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        .feedback-content {
+            padding: 30px;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e9ecef;
+            margin-bottom: 30px;
+        }
+        .tab-button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            background: none;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.3s;
+        }
+        .tab-button.active {
+            color: #007bff;
+            border-bottom: 3px solid #007bff;
+            margin-bottom: -2px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        .rating-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .star {
+            font-size: 32px;
+            cursor: pointer;
+            color: #ddd;
+            transition: color 0.2s;
+        }
+        .star:hover,
+        .star.active {
+            color: #ffc107;
+        }
+        .btn {
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            margin-left: 10px;
+        }
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .message {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .message.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+        .feedback-list {
+            display: grid;
+            gap: 20px;
+        }
+        .feedback-item {
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            background-color: #f8f9fa;
+        }
+        .feedback-item-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .feedback-item-title {
+            font-weight: 600;
+            color: #333;
+        }
+        .feedback-item-date {
+            color: #666;
+            font-size: 12px;
+        }
+        .feedback-item-rating {
+            color: #ffc107;
+            margin-bottom: 10px;
+        }
+        .feedback-item-category {
+            display: inline-block;
+            background-color: #e7f3ff;
+            color: #004085;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .feedback-item-message {
+            color: #555;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        .empty-state p {
+            margin: 0;
+            font-size: 16px;
+        }
+        .character-count {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+        @media (max-width: 600px) {
+            .feedback-container {
+                margin: 0;
+                border-radius: 0;
+            }
+            .feedback-header {
+                padding: 20px;
+            }
+            .feedback-header h1 {
+                font-size: 24px;
+            }
+            .tabs {
+                flex-direction: column;
+            }
+            .tab-button {
+                border-bottom: 1px solid #e9ecef;
+                padding: 12px;
+            }
+            .tab-button.active {
+                border-bottom: 3px solid #007bff;
+            }
+            .btn-group {
+                flex-direction: column;
+            }
+            .btn-secondary {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="feedback-container">
+        <div class="feedback-header">
+            <h1>Feedback</h1>
+            <p>Help us improve by sharing your thoughts</p>
+        </div>
+
+        <div class="feedback-content">
+            <div id="messageContainer"></div>
+
+            <div class="tabs">
+                <button class="tab-button active" onclick="switchTab('submit')">Submit Feedback</button>
+                <button class="tab-button" onclick="switchTab('history')">My Feedback</button>
+            </div>
+
+            <!-- Submit Feedback Tab -->
+            <div id="submit" class="tab-content active">
+                <form id="feedbackForm">
+                    <div class="form-group">
+                        <label for="subject">Subject *</label>
+                        <input type="text" id="subject" name="subject" required placeholder="Brief subject of your feedback" maxlength="255">
+                        <div class="character-count"><span id="subjectCount">0</span>/255</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="message">Message *</label>
+                        <textarea id="message" name="message" required placeholder="Tell us more about your feedback..."></textarea>
+                        <div class="character-count"><span id="messageCount">0</span> characters</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>How satisfied are you? (Optional)</label>
+                        <div class="rating-group" id="ratingGroup">
+                            <span class="star" data-rating="1" title="Poor">★</span>
+                            <span class="star" data-rating="2" title="Fair">★</span>
+                            <span class="star" data-rating="3" title="Good">★</span>
+                            <span class="star" data-rating="4" title="Very Good">★</span>
+                            <span class="star" data-rating="5" title="Excellent">★</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="category">Category (Optional)</label>
+                        <select id="category" name="category">
+                            <option value="general">General Feedback</option>
+                            <option value="feature-request">Feature Request</option>
+                            <option value="bug-report">Bug Report</option>
+                            <option value="improvement">Improvement Suggestion</option>
+                            <option value="support">Support/Help</option>
+                        </select>
+                    </div>
+
+                    <div class="btn-group">
+                        <button type="submit" class="btn">Submit Feedback</button>
+                        <button type="reset" class="btn btn-secondary">Clear</button>
+                    </div>
+                </form>
+
+                <div class="loading" id="loading">Submitting feedback...</div>
+            </div>
+
+            <!-- Feedback History Tab -->
+            <div id="history" class="tab-content">
+                <div class="loading" id="loadingHistory" style="display: block;">Loading feedback history...</div>
+                <div id="feedbackHistoryContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedRating = 0;
+        let authToken = localStorage.getItem('authToken');
+
+        if (!authToken) {
+            showMessage('Please login to submit feedback', 'error');
+            document.getElementById('feedbackForm').style.display = 'none';
+        }
+
+        // Character counters
+        document.getElementById('subject').addEventListener('input', (e) => {
+            document.getElementById('subjectCount').textContent = e.target.value.length;
+        });
+
+        document.getElementById('message').addEventListener('input', (e) => {
+            document.getElementById('messageCount').textContent = e.target.value.length;
+        });
+
+        // Rating stars
+        const stars = document.querySelectorAll('.star');
+        stars.forEach(star => {
+            star.addEventListener('click', (e) => {
+                selectedRating = parseInt(e.target.getAttribute('data-rating'));
+                stars.forEach(s => s.classList.remove('active'));
+                for (let i = 0; i < selectedRating; i++) {
+                    stars[i].classList.add('active');
+                }
+            });
+
+            star.addEventListener('mouseover', (e) => {
+                const rating = parseInt(e.target.getAttribute('data-rating'));
+                stars.forEach((s, idx) => {
+                    s.style.color = idx < rating ? '#ffc107' : '#ddd';
+                });
+            });
+        });
+
+        document.getElementById('ratingGroup').addEventListener('mouseleave', () => {
+            stars.forEach((s, idx) => {
+                s.style.color = idx < selectedRating ? '#ffc107' : '#ddd';
+            });
+        });
+
+        // Form submission
+        document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const subject = document.getElementById('subject').value.trim();
+            const message = document.getElementById('message').value.trim();
+            const rating = selectedRating || null;
+            const category = document.getElementById('category').value;
+
+            if (!subject || !message) {
+                showMessage('Subject and message are required', 'error');
+                return;
+            }
+
+            const form = document.getElementById('feedbackForm');
+            form.style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                const response = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ subject, message, rating, category })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage('Thank you! Your feedback has been submitted successfully.', 'success');
+                    document.getElementById('feedbackForm').reset();
+                    selectedRating = 0;
+                    stars.forEach(s => s.classList.remove('active'));
+                    form.style.display = 'block';
+                    document.getElementById('loading').style.display = 'none';
+
+                    // Reload history
+                    setTimeout(() => {
+                        switchTab('history');
+                        loadFeedbackHistory();
+                    }, 1500);
+                } else {
+                    showMessage(data.error || 'Failed to submit feedback', 'error');
+                    form.style.display = 'block';
+                    document.getElementById('loading').style.display = 'none';
+                }
+            } catch (error) {
+                showMessage('Network error. Please try again.', 'error');
+                form.style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
+                console.error('Error:', error);
+            }
+        });
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            if (tabName === 'history') {
+                loadFeedbackHistory();
+            }
+        }
+
+        async function loadFeedbackHistory() {
+            const container = document.getElementById('feedbackHistoryContainer');
+            const loading = document.getElementById('loadingHistory');
+            loading.style.display = 'block';
+
+            try {
+                const response = await fetch('/api/feedback', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                loading.style.display = 'none';
+
+                if (response.ok && data.feedback && data.feedback.length > 0) {
+                    const feedbackHTML = data.feedback.map(item => `
+                        <div class="feedback-item">
+                            <div class="feedback-item-header">
+                                <div>
+                                    <div class="feedback-item-title">${escapeHtml(item.subject)}</div>
+                                </div>
+                                <div class="feedback-item-date">${formatDate(item.created_at)}</div>
+                            </div>
+                            ${item.rating ? `<div class="feedback-item-rating">${'★'.repeat(item.rating)}${'☆'.repeat(5-item.rating)}</div>` : ''}
+                            ${item.category ? `<div class="feedback-item-category">${escapeHtml(item.category)}</div>` : ''}
+                            <div class="feedback-item-message">${escapeHtml(item.message)}</div>
+                        </div>
+                    `).join('');
+
+                    container.innerHTML = feedbackHTML;
+                } else {
+                    container.innerHTML = '<div class="empty-state"><p>No feedback submitted yet.</p></div>';
+                }
+            } catch (error) {
+                loading.style.display = 'none';
+                container.innerHTML = '<div class="empty-state"><p>Failed to load feedback history. Please try again.</p></div>';
+                console.error('Error:', error);
+            }
+        }
+
+        function showMessage(text, type) {
+            const messageContainer = document.getElementById('messageContainer');
+            messageContainer.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => {
+                if (type !== 'success') return;
+                messageContainer.innerHTML = '';
+            }, 5000);
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

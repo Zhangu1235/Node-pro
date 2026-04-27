@@ -4,7 +4,7 @@ const cors = require('cors');
 const { ApifyClient } = require('apify-client');
 const path = require('path');
 const { loadSnapshot, saveEvents, getStorageInfo } = require('./lib/event-store');
-const { registerUser, loginUser, authMiddleware, verifyToken, refreshToken } = require('./lib/auth');
+const { registerUser, loginUser, authMiddleware, verifyToken, refreshToken, requestPasswordReset, resetPassword, submitFeedback, getUserFeedback } = require('./lib/auth');
 const {
     validateEventQuery,
     filterEventsByQuery,
@@ -145,8 +145,89 @@ app.post('/api/auth/logout', authMiddleware, async (req, res) => {
     return res.json({ message: 'Logged out successfully' });
 });
 
+// Password reset endpoints
+app.post('/api/auth/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const result = await requestPasswordReset(email, `${appUrl}/reset-password`);
+    
+    // Always return success for security
+    return res.status(200).json({ 
+        success: true, 
+        message: 'If an account exists with this email, a password reset link has been sent' 
+    });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+    const { password, passwordConfirm, accessToken } = req.body;
+
+    if (!password || !accessToken) {
+        return res.status(400).json({ error: 'Password and access token are required' });
+    }
+
+    if (password !== passwordConfirm) {
+        return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    const result = await resetPassword(accessToken, password);
+    
+    if (!result.success) {
+        return res.status(400).json({ error: result.error });
+    }
+
+    return res.status(200).json({ success: true, message: result.message });
+});
+
+// Feedback endpoints
+app.post('/api/feedback', authMiddleware, async (req, res) => {
+    const { subject, message, rating, category } = req.body;
+    const userId = req.user.id;
+    const email = req.user.email;
+
+    if (!subject || !message) {
+        return res.status(400).json({ error: 'Subject and message are required' });
+    }
+
+    const result = await submitFeedback(userId, email, subject, message, rating, category);
+    
+    if (!result.success) {
+        return res.status(400).json({ error: result.error });
+    }
+
+    return res.status(201).json(result);
+});
+
+app.get('/api/feedback', authMiddleware, async (req, res) => {
+    const userId = req.user.id;
+
+    const result = await getUserFeedback(userId);
+    
+    if (!result.success) {
+        return res.status(400).json({ error: result.error });
+    }
+
+    return res.status(200).json(result);
+});
+
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/forgot-password', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'forgot-password.html'));
+});
+
+app.get('/reset-password', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'reset-password.html'));
+});
+
+app.get('/feedback', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'feedback.html'));
 });
 
 // Listen for connections (WebSockets)
