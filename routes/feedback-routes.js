@@ -1,7 +1,5 @@
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
-const authRoutes = require('./auth-routes');
-const verifyAuth = authRoutes.verifyAuth;
 
 const router = express.Router();
 
@@ -11,12 +9,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
  * POST /api/feedback
- * Create new feedback (requires authentication)
+ * Create new feedback (authentication disabled - open access)
  */
-router.post('/', verifyAuth, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { title, message, category } = req.body;
-    const userId = req.user.userId;
+    // TEMP: Allow access without authentication
+    const userId = req.user?.userId || 'anonymous-' + Date.now();
 
     // Validate input
     if (!title || !message) {
@@ -74,11 +73,12 @@ router.post('/', verifyAuth, async (req, res) => {
 
 /**
  * GET /api/feedback
- * Get all feedback for the current user
+ * Get all feedback (authentication disabled - open access)
  */
-router.get('/', verifyAuth, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    // TEMP: Allow access without authentication
+    const userId = req.user?.userId || 'anonymous-' + Date.now();
 
     const { data: feedback, error } = await supabase
       .from('feedback')
@@ -108,12 +108,13 @@ router.get('/', verifyAuth, async (req, res) => {
 
 /**
  * GET /api/feedback/:id
- * Get specific feedback by ID
+ * Get specific feedback by ID (authentication disabled - open access)
  */
-router.get('/:id', verifyAuth, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    // TEMP: Allow access without authentication
+    const userId = req.user?.userId || 'anonymous-' + Date.now();
 
     const { data: feedback, error } = await supabase
       .from('feedback')
@@ -142,12 +143,13 @@ router.get('/:id', verifyAuth, async (req, res) => {
 
 /**
  * PUT /api/feedback/:id
- * Update feedback
+ * Update feedback (authentication disabled - open access)
  */
-router.put('/:id', verifyAuth, async (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    // TEMP: Allow access without authentication
+    const userId = req.user?.userId || 'anonymous-' + Date.now();
     const { title, message, category, status } = req.body;
 
     // Check if feedback belongs to user
@@ -200,12 +202,13 @@ router.put('/:id', verifyAuth, async (req, res) => {
 
 /**
  * DELETE /api/feedback/:id
- * Delete feedback
+ * Delete feedback (authentication disabled - open access)
  */
-router.delete('/:id', verifyAuth, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    // TEMP: Allow access without authentication
+    const userId = req.user?.userId || 'anonymous-' + Date.now();
 
     // Check if feedback belongs to user
     const { data: existingFeedback } = await supabase

@@ -89,119 +89,126 @@ app.get('/api/auth/config', (req, res) => {
     });
 });
 
-app.post('/api/auth/register', async (req, res) => {
-    const { username, email, password, captchaToken = '' } = req.body;
+// COMMENTED OUT - SIGNUP DISABLED
+// app.post('/api/auth/register', async (req, res) => {
+//     const { username, email, password, captchaToken = '' } = req.body;
+//
+//     if (!username || !email || !password) {
+//         return res.status(400).json({ error: 'Username, email, and password are required' });
+//     }
+//
+//     if (password.length < 6) {
+//         return res.status(400).json({ error: 'Password must be at least 6 characters' });
+//     }
+//
+//     const result = await registerUser(email, password, username, captchaToken);
+//     console.log('[register]', email, '→', result.success ? 'OK' + (result.session ? ' (session included)' : ' (no session)') : result.error);
+//     
+//     if (!result.success) {
+//         return res.status(400).json({ error: result.error });
+//     }
+//
+//     return res.status(201).json(result);
+// });
 
-    if (!username || !email || !password) {
-        return res.status(400).json({ error: 'Username, email, and password are required' });
-    }
+// COMMENTED OUT - LOGIN DISABLED
+// app.post('/api/auth/login', async (req, res) => {
+//     const { email, password, captchaToken = '' } = req.body;
+//
+//     if (!email || !password) {
+//         return res.status(400).json({ error: 'Email and password are required' });
+//     }
+//
+//     const result = await loginUser(email, password, captchaToken);
+//     console.log('[login]', email, '→', result.success ? 'OK' : result.error);
+//     
+//     if (!result.success) {
+//         return res.status(401).json({ error: result.error });
+//     }
+//
+//     return res.json(result);
+// });
 
-    if (password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
-    }
+// COMMENTED OUT - AUTH VERIFY DISABLED
+// app.get('/api/auth/verify', (req, res) => {
+//     res.json({ 
+//         message: 'Token is valid (open access)',
+//         user: {
+//             id: 'anonymous',
+//             email: 'anonymous@example.com'
+//         }
+//     });
+// });
 
-    const result = await registerUser(email, password, username, captchaToken);
-    console.log('[register]', email, '→', result.success ? 'OK' + (result.session ? ' (session included)' : ' (no session)') : result.error);
-    
-    if (!result.success) {
-        return res.status(400).json({ error: result.error });
-    }
+// COMMENTED OUT - TOKEN REFRESH DISABLED
+// app.post('/api/auth/refresh', async (req, res) => {
+//     const { refresh_token } = req.body;
+//
+//     if (!refresh_token) {
+//         return res.status(400).json({ error: 'Refresh token is required' });
+//     }
+//
+//     const result = await refreshToken(refresh_token);
+//     
+//     if (!result.success) {
+//         return res.status(401).json({ error: result.error });
+//     }
+//
+//     return res.json(result);
+// });
 
-    return res.status(201).json(result);
-});
+// COMMENTED OUT - LOGOUT DISABLED
+// app.post('/api/auth/logout', async (req, res) => {
+//     // With Supabase, logout is mainly client-side (remove token)
+//     // But we can invalidate sessions on the server if needed
+//     return res.json({ message: 'Logged out successfully' });
+// });
 
-app.post('/api/auth/login', async (req, res) => {
-    const { email, password, captchaToken = '' } = req.body;
+// COMMENTED OUT - PASSWORD RESET DISABLED
+// app.post('/api/auth/forgot-password', async (req, res) => {
+//     const { email } = req.body;
+//     const appUrl = process.env.APP_URL || 'http://localhost:3000';
+//
+//     if (!email) {
+//         return res.status(400).json({ error: 'Email is required' });
+//     }
+//
+//     const result = await requestPasswordReset(email, `${appUrl}/reset-password`);
+//     
+//     // Always return success for security
+//     return res.status(200).json({ 
+//         success: true, 
+//         message: 'If an account exists with this email, a password reset link has been sent' 
+//     });
+// });
 
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    const result = await loginUser(email, password, captchaToken);
-    console.log('[login]', email, '→', result.success ? 'OK' : result.error);
-    
-    if (!result.success) {
-        return res.status(401).json({ error: result.error });
-    }
-
-    return res.json(result);
-});
-
-app.get('/api/auth/verify', authMiddleware, (req, res) => {
-    res.json({ 
-        message: 'Token is valid',
-        user: {
-            id: req.user.id,
-            email: req.user.email
-        }
-    });
-});
-
-app.post('/api/auth/refresh', async (req, res) => {
-    const { refresh_token } = req.body;
-
-    if (!refresh_token) {
-        return res.status(400).json({ error: 'Refresh token is required' });
-    }
-
-    const result = await refreshToken(refresh_token);
-    
-    if (!result.success) {
-        return res.status(401).json({ error: result.error });
-    }
-
-    return res.json(result);
-});
-
-app.post('/api/auth/logout', authMiddleware, async (req, res) => {
-    // With Supabase, logout is mainly client-side (remove token)
-    // But we can invalidate sessions on the server if needed
-    return res.json({ message: 'Logged out successfully' });
-});
-
-// Password reset endpoints
-app.post('/api/auth/forgot-password', async (req, res) => {
-    const { email } = req.body;
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-
-    if (!email) {
-        return res.status(400).json({ error: 'Email is required' });
-    }
-
-    const result = await requestPasswordReset(email, `${appUrl}/reset-password`);
-    
-    // Always return success for security
-    return res.status(200).json({ 
-        success: true, 
-        message: 'If an account exists with this email, a password reset link has been sent' 
-    });
-});
-
-app.post('/api/auth/reset-password', async (req, res) => {
-    const { password, passwordConfirm, accessToken } = req.body;
-
-    if (!password || !accessToken) {
-        return res.status(400).json({ error: 'Password and access token are required' });
-    }
-
-    if (password !== passwordConfirm) {
-        return res.status(400).json({ error: 'Passwords do not match' });
-    }
-
-    const result = await resetPassword(accessToken, password);
-    
-    if (!result.success) {
-        return res.status(400).json({ error: result.error });
-    }
-
-    return res.status(200).json({ success: true, message: result.message });
-});
+// COMMENTED OUT - RESET PASSWORD ENDPOINT DISABLED
+// app.post('/api/auth/reset-password', async (req, res) => {
+//     const { password, passwordConfirm, accessToken } = req.body;
+//
+//     if (!password || !accessToken) {
+//         return res.status(400).json({ error: 'Password and access token are required' });
+//     }
+//
+//     if (password !== passwordConfirm) {
+//         return res.status(400).json({ error: 'Passwords do not match' });
+//     }
+//
+//     const result = await resetPassword(accessToken, password);
+//     
+//     if (!result.success) {
+//         return res.status(400).json({ error: result.error });
+//     }
+//
+//     return res.status(200).json({ success: true, message: result.message });
+// });
 
 // Feedback endpoints
-app.post('/api/feedback', authMiddleware, async (req, res) => {
+// TEMP: Authentication disabled - open access
+app.post('/api/feedback', async (req, res) => {
     const { subject, message, rating, category } = req.body;
-    const userId = req.user.id;
-    const email = req.user.email;
+    const userId = req.user?.id || 'anonymous-' + Date.now();
+    const email = req.user?.email || 'anonymous@example.com';
 
     if (!subject || !message) {
         return res.status(400).json({ error: 'Subject and message are required' });
@@ -216,8 +223,9 @@ app.post('/api/feedback', authMiddleware, async (req, res) => {
     return res.status(201).json(result);
 });
 
-app.get('/api/feedback', authMiddleware, async (req, res) => {
-    const userId = req.user.id;
+// TEMP: Authentication disabled - open access
+app.get('/api/feedback', async (req, res) => {
+    const userId = req.user?.id || 'anonymous-' + Date.now();
 
     const result = await getUserFeedback(userId);
     
@@ -228,17 +236,20 @@ app.get('/api/feedback', authMiddleware, async (req, res) => {
     return res.status(200).json(result);
 });
 
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
+// COMMENTED OUT - LOGIN PAGE DISABLED
+// app.get('/login', (req, res) => {
+//     res.sendFile(path.join(__dirname, 'public', 'login.html'));
+// });
 
-app.get('/forgot-password', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'forgot-password.html'));
-});
+// COMMENTED OUT - FORGOT PASSWORD PAGE DISABLED
+// app.get('/forgot-password', (req, res) => {
+//     res.sendFile(path.join(__dirname, 'public', 'forgot-password.html'));
+// });
 
-app.get('/reset-password', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'reset-password.html'));
-});
+// COMMENTED OUT - RESET PASSWORD PAGE DISABLED
+// app.get('/reset-password', (req, res) => {
+//     res.sendFile(path.join(__dirname, 'public', 'reset-password.html'));
+// });
 
 app.get('/feedback', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'feedback.html'));
@@ -323,7 +334,8 @@ function summarizeEventForAssistant(event) {
     };
 }
 
-app.post('/api/apify/fetch', authMiddleware, async (req, res) => {
+// TEMP: Authentication disabled - open access
+app.post('/api/apify/fetch', async (req, res) => {
     if (!APIFY_API_TOKEN) {
         return res.status(400).json({ error: 'Missing APIFY_API_TOKEN in .env' });
     }
@@ -425,7 +437,8 @@ app.post('/api/webhooks/apify', express.text({type: '*/*'}), async (req, res) =>
 });
 
 // Enhanced /api/events endpoint with filtering, sorting, and pagination
-app.get('/api/events', authMiddleware, async (req, res) => {
+// TEMP: Authentication disabled - open access
+app.get('/api/events', async (req, res) => {
     try {
         res.setHeader('Cache-Control', 'no-store');
         const validation = validateEventQuery(req.query);
@@ -472,7 +485,8 @@ app.get('/api/events', authMiddleware, async (req, res) => {
     }
 });
 
-app.get('/api/events/download', authMiddleware, async (req, res) => {
+// TEMP: Authentication disabled - open access
+app.get('/api/events/download', async (req, res) => {
     try {
         if (!cacheMeta.filePath) {
             return res.status(404).json({ error: 'No local JSON cache available yet.' });
@@ -486,7 +500,8 @@ app.get('/api/events/download', authMiddleware, async (req, res) => {
 });
 
 // Trending events endpoint
-app.get('/api/events/trending', authMiddleware, async (req, res) => {
+// TEMP: Authentication disabled - open access
+app.get('/api/events/trending', async (req, res) => {
     try {
         const days = Math.min(parseInt(req.query.days) || 7, 90);
         const limit = Math.min(parseInt(req.query.limit) || 10, 50);
@@ -509,7 +524,8 @@ app.get('/api/events/trending', authMiddleware, async (req, res) => {
 });
 
 // Event suggestions endpoint (search-as-you-type)
-app.get('/api/events/suggestions', authMiddleware, async (req, res) => {
+// TEMP: Authentication disabled - open access
+app.get('/api/events/suggestions', async (req, res) => {
     try {
         const { query = '' } = req.query;
         const limit = Math.min(parseInt(req.query.limit) || 5, 20);
@@ -543,7 +559,8 @@ app.get('/api/events/suggestions', authMiddleware, async (req, res) => {
 });
 
 // Bulk operations endpoint
-app.post('/api/events/bulk', strictLimiter.middleware(), authMiddleware, async (req, res) => {
+// TEMP: Authentication disabled - open access
+app.post('/api/events/bulk', strictLimiter.middleware(), async (req, res) => {
     try {
         const { action, eventIds = [] } = req.body;
         
@@ -624,7 +641,8 @@ app.post('/api/events/bulk', strictLimiter.middleware(), authMiddleware, async (
     }
 });
 
-app.post('/api/assistant', authMiddleware, async (req, res) => {
+// TEMP: Authentication disabled - open access
+app.post('/api/assistant', async (req, res) => {
     if (!GEMINI_API_KEY) {
         return res.status(503).json({ error: 'Missing GEMINI_API_KEY in .env' });
     }
