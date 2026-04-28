@@ -28,6 +28,10 @@ const LoginApp = () => {
     useEffect(() => {
         const loadAuthConfig = async () => {
             try {
+                // TEMP BYPASS: login/signup should accept any values without captcha.
+                setCaptchaSiteKey('');
+                return;
+
                 const response = await fetch('/api/auth/config');
                 const data = await response.json();
                 const siteKey = data?.captcha?.siteKey || '';
@@ -112,39 +116,40 @@ const LoginApp = () => {
 
         const { email, password, confirmPassword, username } = formData;
 
-        if (!email || !password) {
-            setErrorMsg('Email and password are required');
-            return;
-        }
+        // TEMP BYPASS: accept any login/signup values for now.
+        // if (!email || !password) {
+        //     setErrorMsg('Email and password are required');
+        //     return;
+        // }
 
-        if (!email.includes('@')) {
-            setErrorMsg('Invalid email format');
-            return;
-        }
+        // if (!email.includes('@')) {
+        //     setErrorMsg('Invalid email format');
+        //     return;
+        // }
 
-        if (captchaSiteKey && !captchaToken) {
-            setErrorMsg('Please complete captcha verification');
-            return;
-        }
+        // if (captchaSiteKey && !captchaToken) {
+        //     setErrorMsg('Please complete captcha verification');
+        //     return;
+        // }
 
-        if (!isLoginMode) {
-            if (!confirmPassword || !username) {
-                setErrorMsg('All fields are required');
-                return;
-            }
-            if (password.length < 6) {
-                setErrorMsg('Password must be at least 6 characters');
-                return;
-            }
-            if (password !== confirmPassword) {
-                setErrorMsg('Passwords do not match');
-                return;
-            }
-            if (username.length < 2) {
-                setErrorMsg('Username must be at least 2 characters');
-                return;
-            }
-        }
+        // if (!isLoginMode) {
+        //     if (!confirmPassword || !username) {
+        //         setErrorMsg('All fields are required');
+        //         return;
+        //     }
+        //     if (password.length < 6) {
+        //         setErrorMsg('Password must be at least 6 characters');
+        //         return;
+        //     }
+        //     if (password !== confirmPassword) {
+        //         setErrorMsg('Passwords do not match');
+        //         return;
+        //     }
+        //     if (username.length < 2) {
+        //         setErrorMsg('Username must be at least 2 characters');
+        //         return;
+        //     }
+        // }
 
         setIsLoading(true);
 

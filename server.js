@@ -203,38 +203,37 @@ app.get('/api/auth/config', (req, res) => {
 //     return res.status(200).json({ success: true, message: result.message });
 // });
 
-// Feedback endpoints
-// TEMP: Authentication disabled - open access
-app.post('/api/feedback', async (req, res) => {
-    const { subject, message, rating, category } = req.body;
-    const userId = req.user?.id || 'anonymous-' + Date.now();
-    const email = req.user?.email || 'anonymous@example.com';
+// COMMENTED OUT - FEEDBACK ROUTES ARE NOW HANDLED BY /routes/feedback-routes.js
+// app.post('/api/feedback', async (req, res) => {
+//     const { subject, message, rating, category } = req.body;
+//     const userId = req.user?.id || 'anonymous-' + Date.now();
+//     const email = req.user?.email || 'anonymous@example.com';
+//
+//     if (!subject || !message) {
+//         return res.status(400).json({ error: 'Subject and message are required' });
+//     }
+//
+//     const result = await submitFeedback(userId, email, subject, message, rating, category);
+//     
+//     if (!result.success) {
+//         return res.status(400).json({ error: result.error });
+//     }
+//
+//     return res.status(201).json(result);
+// });
 
-    if (!subject || !message) {
-        return res.status(400).json({ error: 'Subject and message are required' });
-    }
-
-    const result = await submitFeedback(userId, email, subject, message, rating, category);
-    
-    if (!result.success) {
-        return res.status(400).json({ error: result.error });
-    }
-
-    return res.status(201).json(result);
-});
-
-// TEMP: Authentication disabled - open access
-app.get('/api/feedback', async (req, res) => {
-    const userId = req.user?.id || 'anonymous-' + Date.now();
-
-    const result = await getUserFeedback(userId);
-    
-    if (!result.success) {
-        return res.status(400).json({ error: result.error });
-    }
-
-    return res.status(200).json(result);
-});
+// COMMENTED OUT - FEEDBACK ROUTES ARE NOW HANDLED BY /routes/feedback-routes.js
+// app.get('/api/feedback', async (req, res) => {
+//     const userId = req.user?.id || 'anonymous-' + Date.now();
+//
+//     const result = await getUserFeedback(userId);
+//     
+//     if (!result.success) {
+//         return res.status(400).json({ error: result.error });
+//     }
+//
+//     return res.status(200).json(result);
+// });
 
 // COMMENTED OUT - LOGIN PAGE DISABLED
 // app.get('/login', (req, res) => {

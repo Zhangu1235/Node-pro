@@ -1,20 +1,56 @@
 const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Simple file-based feedback storage
+const feedbackFile = path.join(__dirname, '..', 'data', 'feedback.json');
+
+// Ensure data directory exists
+const dataDir = path.dirname(feedbackFile);
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+// Initialize feedback file if it doesn't exist
+if (!fs.existsSync(feedbackFile)) {
+  fs.writeFileSync(feedbackFile, JSON.stringify([], null, 2));
+}
+
+/**
+ * GET all feedback
+ */
+function getAllFeedback() {
+  try {
+    const data = fs.readFileSync(feedbackFile, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading feedback file:', error);
+    return [];
+  }
+}
+
+/**
+ * SAVE feedback
+ */
+function saveFeedback(feedbackList) {
+  try {
+    fs.writeFileSync(feedbackFile, JSON.stringify(feedbackList, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error saving feedback file:', error);
+    return false;
+  }
+}
 
 /**
  * POST /api/feedback
- * Create new feedback (authentication disabled - open access)
+ * Create new feedback (open access)
  */
 router.post('/', async (req, res) => {
   try {
     const { title, message, category } = req.body;
-    // TEMP: Allow access without authentication
     const userId = req.user?.userId || 'anonymous-' + Date.now();
 
     // Validate input
@@ -36,94 +72,76 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Create feedback
-    const { data: feedback, error } = await supabase
-      .from('feedback')
-      .insert([
-        {
-          user_id: userId,
-          title,
-          message,
-          category: category || 'general',
-          status: 'pending'
-        }
-      ])
-      .select()
-      .single();
+    // Create feedback object
+    const feedback = {
+      id: Date.now().toString(),
+      user_id: userId,
+      title,
+      message,
+      category: category || 'general',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
-    if (error) {
-      return res.status(500).json({
-        error: 'Failed to create feedback',
-        details: error.message
+    // Get existing feedback and add new one
+    const allFeedback = getAllFeedback();
+    allFeedback.push(feedback);
+
+    // Save to file
+    if (saveFeedback(allFeedback)) {
+      res.status(201).json({
+        success: true,
+        message: 'Feedback submitted successfully',
+        feedback
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to save feedback'
       });
     }
-
-    res.status(201).json({
-      success: true,
-      message: 'Feedback submitted successfully',
-      feedback
-    });
   } catch (error) {
     console.error('Create feedback error:', error);
     res.status(500).json({
-      error: 'Internal server error'
+      error: 'Internal server error',
+      details: error.message
     });
   }
 });
 
 /**
  * GET /api/feedback
- * Get all feedback (authentication disabled - open access)
+ * Get all feedback (open access)
  */
 router.get('/', async (req, res) => {
   try {
-    // TEMP: Allow access without authentication
-    const userId = req.user?.userId || 'anonymous-' + Date.now();
-
-    const { data: feedback, error } = await supabase
-      .from('feedback')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return res.status(500).json({
-        error: 'Failed to fetch feedback',
-        details: error.message
-      });
-    }
+    const allFeedback = getAllFeedback();
 
     res.json({
       success: true,
-      feedback,
-      count: feedback.length
+      feedback: allFeedback,
+      count: allFeedback.length
     });
   } catch (error) {
-    console.error('Fetch feedback error:', error);
+    console.error('Get feedback error:', error);
     res.status(500).json({
-      error: 'Internal server error'
+      error: 'Internal server error',
+      details: error.message
     });
   }
 });
 
 /**
  * GET /api/feedback/:id
- * Get specific feedback by ID (authentication disabled - open access)
+ * Get specific feedback by ID (open access)
  */
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    // TEMP: Allow access without authentication
-    const userId = req.user?.userId || 'anonymous-' + Date.now();
+    const allFeedback = getAllFeedback();
+    const feedback = allFeedback.find(f => f.id === id);
 
-    const { data: feedback, error } = await supabase
-      .from('feedback')
-      .select('*')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (error || !feedback) {
+    if (!feedback) {
       return res.status(404).json({
         error: 'Feedback not found'
       });
@@ -136,114 +154,93 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('Get feedback error:', error);
     res.status(500).json({
-      error: 'Internal server error'
+      error: 'Internal server error',
+      details: error.message
     });
   }
 });
 
 /**
  * PUT /api/feedback/:id
- * Update feedback (authentication disabled - open access)
+ * Update feedback (open access)
  */
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    // TEMP: Allow access without authentication
-    const userId = req.user?.userId || 'anonymous-' + Date.now();
     const { title, message, category, status } = req.body;
+    const allFeedback = getAllFeedback();
+    const feedbackIndex = allFeedback.findIndex(f => f.id === id);
 
-    // Check if feedback belongs to user
-    const { data: existingFeedback } = await supabase
-      .from('feedback')
-      .select('id')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (!existingFeedback) {
+    if (feedbackIndex === -1) {
       return res.status(404).json({
         error: 'Feedback not found'
       });
     }
 
-    const updateData = {};
-    if (title) updateData.title = title;
-    if (message) updateData.message = message;
-    if (category) updateData.category = category;
-    if (status) updateData.status = status;
-    updateData.updated_at = new Date().toISOString();
+    // Update fields
+    if (title) allFeedback[feedbackIndex].title = title;
+    if (message) allFeedback[feedbackIndex].message = message;
+    if (category) allFeedback[feedbackIndex].category = category;
+    if (status) allFeedback[feedbackIndex].status = status;
+    allFeedback[feedbackIndex].updated_at = new Date().toISOString();
 
-    const { data: updatedFeedback, error } = await supabase
-      .from('feedback')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      return res.status(500).json({
-        error: 'Failed to update feedback',
-        details: error.message
+    // Save to file
+    if (saveFeedback(allFeedback)) {
+      res.json({
+        success: true,
+        message: 'Feedback updated successfully',
+        feedback: allFeedback[feedbackIndex]
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to update feedback'
       });
     }
-
-    res.json({
-      success: true,
-      message: 'Feedback updated successfully',
-      feedback: updatedFeedback
-    });
   } catch (error) {
     console.error('Update feedback error:', error);
     res.status(500).json({
-      error: 'Internal server error'
+      error: 'Internal server error',
+      details: error.message
     });
   }
 });
 
 /**
  * DELETE /api/feedback/:id
- * Delete feedback (authentication disabled - open access)
+ * Delete feedback (open access)
  */
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    // TEMP: Allow access without authentication
-    const userId = req.user?.userId || 'anonymous-' + Date.now();
+    const allFeedback = getAllFeedback();
+    const feedbackIndex = allFeedback.findIndex(f => f.id === id);
 
-    // Check if feedback belongs to user
-    const { data: existingFeedback } = await supabase
-      .from('feedback')
-      .select('id')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (!existingFeedback) {
+    if (feedbackIndex === -1) {
       return res.status(404).json({
         error: 'Feedback not found'
       });
     }
 
-    const { error } = await supabase
-      .from('feedback')
-      .delete()
-      .eq('id', id);
+    // Remove feedback
+    const deletedFeedback = allFeedback.splice(feedbackIndex, 1);
 
-    if (error) {
-      return res.status(500).json({
-        error: 'Failed to delete feedback',
-        details: error.message
+    // Save to file
+    if (saveFeedback(allFeedback)) {
+      res.json({
+        success: true,
+        message: 'Feedback deleted successfully',
+        feedback: deletedFeedback[0]
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to delete feedback'
       });
     }
-
-    res.json({
-      success: true,
-      message: 'Feedback deleted successfully'
-    });
   } catch (error) {
     console.error('Delete feedback error:', error);
     res.status(500).json({
-      error: 'Internal server error'
+      error: 'Internal server error',
+      details: error.message
     });
   }
 });

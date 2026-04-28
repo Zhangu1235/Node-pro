@@ -14,7 +14,50 @@ const router = express.Router();
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
+  : null;
+
+const AUTH_BYPASS_ENABLED = true;
+
+function createBypassUser(email = '', username = '') {
+  const fallbackEmail = email || 'dev@example.com';
+  return {
+    id: 'dev-bypass-user',
+    email: fallbackEmail,
+    username: username || fallbackEmail.split('@')[0] || 'dev-user'
+  };
+}
+
+function createBypassSession() {
+  return {
+    access_token: 'dev-bypass-access-token',
+    refresh_token: 'dev-bypass-refresh-token',
+    expires_in: 60 * 60 * 24 * 365
+  };
+}
+
+function sendBypassAuthResponse(req, res, statusCode = 200) {
+  const { email = '', username = '' } = req.body || {};
+
+  return res.status(statusCode).json({
+    success: true,
+    message: 'Authentication bypassed for development',
+    user: createBypassUser(email, username),
+    session: createBypassSession(),
+    token: createBypassSession().access_token
+  });
+}
+
+if (AUTH_BYPASS_ENABLED) {
+  router.post('/signup', (req, res) => sendBypassAuthResponse(req, res, 201));
+  router.post('/register', (req, res) => sendBypassAuthResponse(req, res, 201));
+  router.post('/login', (req, res) => sendBypassAuthResponse(req, res));
+  router.post('/logout', (req, res) => res.json({ success: true, message: 'Logged out successfully' }));
+  router.get('/verify', (req, res) => res.json({ success: true, valid: true, user: createBypassUser() }));
+  router.get('/me', (req, res) => res.json({ success: true, user: createBypassUser() }));
+  router.post('/refresh', (req, res) => res.json({ success: true, session: createBypassSession(), ...createBypassSession() }));
+}
 
 /**
  * COMMENTED OUT - SIGNUP DISABLED
@@ -226,6 +269,11 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  * Middleware to verify authentication
  */
 function verifyAuth(req, res, next) {
+  if (AUTH_BYPASS_ENABLED) {
+    req.user = createBypassUser();
+    return next();
+  }
+
   const token = extractToken(req);
   if (!token) {
     return res.status(401).json({

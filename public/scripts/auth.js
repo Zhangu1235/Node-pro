@@ -4,6 +4,24 @@
 const AUTH_TOKEN_KEY = 'startup-events-auth-token';
 const REFRESH_TOKEN_KEY = 'startup-events-refresh-token';
 const USER_KEY = 'startup-events-user';
+const AUTH_BYPASS_ENABLED = true;
+
+function createBypassUser(email = '', username = '') {
+    const fallbackEmail = email || 'dev@example.com';
+    return {
+        id: 'dev-bypass-user',
+        email: fallbackEmail,
+        username: username || fallbackEmail.split('@')[0] || 'dev-user'
+    };
+}
+
+function createBypassSession() {
+    return {
+        access_token: 'dev-bypass-access-token',
+        refresh_token: 'dev-bypass-refresh-token',
+        expires_in: 60 * 60 * 24 * 365
+    };
+}
 
 function normalizeAuthErrorMessage(message) {
     if (!message) return 'Authentication failed';
@@ -25,6 +43,17 @@ const AuthClient = window.AuthClient = {
      */
     async signup(email, password, username, captchaToken = '') {
         try {
+            if (AUTH_BYPASS_ENABLED) {
+                // TEMP BYPASS: accept any signup values and create a local fake session.
+                void password;
+                void captchaToken;
+                const user = createBypassUser(email, username);
+                const session = createBypassSession();
+                this.setUser(user);
+                this.setTokens(session.access_token, session.refresh_token);
+                return { success: true, user, hasSession: true };
+            }
+
             const response = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: {
@@ -65,6 +94,17 @@ const AuthClient = window.AuthClient = {
      */
     async login(email, password, captchaToken = '') {
         try {
+            if (AUTH_BYPASS_ENABLED) {
+                // TEMP BYPASS: accept any login values and create a local fake session.
+                void password;
+                void captchaToken;
+                const user = createBypassUser(email);
+                const session = createBypassSession();
+                this.setUser(user);
+                this.setTokens(session.access_token, session.refresh_token);
+                return { success: true, user };
+            }
+
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
@@ -123,6 +163,16 @@ const AuthClient = window.AuthClient = {
      * Check if user is authenticated
      */
     isAuthenticated() {
+        if (AUTH_BYPASS_ENABLED) {
+            if (!this.getToken()) {
+                const user = createBypassUser();
+                const session = createBypassSession();
+                this.setUser(user);
+                this.setTokens(session.access_token, session.refresh_token);
+            }
+            return true;
+        }
+
         return !!this.getToken();
     },
 
@@ -179,6 +229,10 @@ const AuthClient = window.AuthClient = {
      */
     async verifyToken() {
         try {
+            if (AUTH_BYPASS_ENABLED) {
+                return true;
+            }
+
             const token = this.getToken();
             if (!token) return false;
 
@@ -207,6 +261,12 @@ const AuthClient = window.AuthClient = {
      */
     async refreshToken() {
         try {
+            if (AUTH_BYPASS_ENABLED) {
+                const session = createBypassSession();
+                this.setTokens(session.access_token, session.refresh_token);
+                return true;
+            }
+
             const refreshToken = this.getRefreshToken();
             if (!refreshToken) return false;
 
